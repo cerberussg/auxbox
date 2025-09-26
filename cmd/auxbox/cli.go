@@ -26,6 +26,7 @@ Usage:
   auxbox stop                      Stop playback (reset to beginning)
   auxbox skip [n]                  Skip forward n tracks (default: 1)
   auxbox back [n]                  Skip backward n tracks (default: 1)
+  auxbox volume [0-100]            Show or set volume percentage
   auxbox status                    Show current track info
   auxbox list                      List tracks in current queue
   auxbox exit                      Exit daemon (stop everything)
@@ -36,6 +37,7 @@ Examples:
   auxbox start --folder ~/Downloads/new-pack/
   auxbox skip 3
   auxbox back
+  auxbox volume 75
   auxbox stop
   auxbox exit`
 )
@@ -92,6 +94,8 @@ func (c *CLI) Run(args []string) {
 		c.sendCommand(shared.NewListCommand())
 	case "stop":
 		c.sendCommand(shared.NewStopCommand())
+	case "volume":
+		c.handleVolumeCommand(args)
 	case "exit":
 		c.sendCommand(shared.NewExitCommand())
 	default:
@@ -199,6 +203,8 @@ func (c *CLI) sendCommand(cmd shared.Command) {
 		c.printStatusResponse(resp)
 	case shared.CmdList:
 		c.printListResponse(resp)
+	case shared.CmdVolume:
+		c.printVolumeResponse(resp)
 	case shared.CmdStop:
 		fmt.Println("Playback stopped.")
 	case shared.CmdExit:
@@ -276,6 +282,28 @@ func (c *CLI) printListResponse(resp *shared.Response) {
 	}
 }
 
+func (c *CLI) printVolumeResponse(resp *shared.Response) {
+	if resp.Data == nil {
+		// Just print the message (e.g., "Volume set to 75%")
+		fmt.Println(resp.Message)
+		return
+	}
+
+	// Data might contain current volume info
+	if dataMap, ok := resp.Data.(map[string]interface{}); ok {
+		if volumeInterface, exists := dataMap["volume"]; exists {
+			if volumeFloat, ok := volumeInterface.(float64); ok {
+				volumePercent := int(volumeFloat * 100)
+				fmt.Printf("Volume: %d%%\n", volumePercent)
+				return
+			}
+		}
+	}
+
+	// Fallback to message
+	fmt.Println(resp.Message)
+}
+
 // Helper methods
 
 func (c *CLI) pathExists(path string) bool {
@@ -298,6 +326,30 @@ func (c *CLI) getStringFromMap(m map[string]interface{}, key, defaultValue strin
 		}
 	}
 	return defaultValue
+}
+
+func (c *CLI) handleVolumeCommand(args []string) {
+	// If no volume specified, get current volume
+	if len(args) <= 2 {
+		c.sendCommand(shared.NewVolumeCommand(-1)) // -1 means "get current volume"
+		return
+	}
+
+	// Parse volume percentage
+	volumeStr := args[2]
+	volume, err := strconv.Atoi(volumeStr)
+
+	if err != nil {
+		fmt.Printf("Invalid volume: %s. Use a number from 0-100.\n", volumeStr)
+		return
+	}
+
+	if volume < 0 || volume > 100 {
+		fmt.Printf("Volume must be between 0-100, got %d.\n", volume)
+		return
+	}
+
+	c.sendCommand(shared.NewVolumeCommand(volume))
 }
 
 // startDaemon starts the daemon server as a background process
