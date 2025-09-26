@@ -35,8 +35,8 @@ ehthumbs.db
 Thumbs.db
 
 # auxbox specific
-auxbox
-auxbox.exe
+/auxbox
+/auxbox.exe
 *.sock
 
 # Build artifacts
