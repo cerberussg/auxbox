@@ -363,7 +363,6 @@ func findSubstring(s, substr string) bool {
 	}
 	return false
 }
-
 func TestServer_HandleStopCommand(t *testing.T) {
 	server := NewServer()
 
@@ -402,6 +401,74 @@ func TestServer_HandleStopCommand(t *testing.T) {
 	status := server.player.GetStatus()
 	if status.Position != "0:00" {
 		t.Errorf("Position should be reset to 0:00 after stop, got %s", status.Position)
+	}
+}
+
+func TestServer_HandleVolumeCommand(t *testing.T) {
+	server := NewServer()
+
+	// Setup tracks
+	tmpDir := createTestDirectory(t)
+	defer os.RemoveAll(tmpDir)
+
+	startCmd := shared.NewStartCommand(shared.SourceFolder, tmpDir)
+	server.HandleCommand(startCmd)
+
+	// Test getting current volume (default should be 100%)
+	getVolumeCmd := shared.NewVolumeCommand(-1)
+	resp := server.HandleCommand(getVolumeCmd)
+
+	if !resp.Success {
+		t.Errorf("Get volume command failed: %s", resp.Message)
+	}
+
+	if !containsString(resp.Message, "Volume:") {
+		t.Errorf("Get volume response should contain 'Volume:', got: %s", resp.Message)
+	}
+
+	// Test setting volume to 50%
+	setVolumeCmd := shared.NewVolumeCommand(50)
+	resp = server.HandleCommand(setVolumeCmd)
+
+	if !resp.Success {
+		t.Errorf("Set volume command failed: %s", resp.Message)
+	}
+
+	expectedMessage := "Volume set to 50%"
+	if resp.Message != expectedMessage {
+		t.Errorf("Expected message '%s', got '%s'", expectedMessage, resp.Message)
+	}
+
+	// Verify volume was actually set
+	status := server.player.GetStatus()
+	expectedVolume := 0.5
+	if status.Volume != expectedVolume {
+		t.Errorf("Player volume should be %f, got %f", expectedVolume, status.Volume)
+	}
+
+	// Test setting volume to 0 (mute)
+	muteCmd := shared.NewVolumeCommand(0)
+	resp = server.HandleCommand(muteCmd)
+
+	if !resp.Success {
+		t.Errorf("Mute command failed: %s", resp.Message)
+	}
+
+	if !containsString(resp.Message, "muted") {
+		t.Errorf("Mute response should mention 'muted', got: %s", resp.Message)
+	}
+
+	// Test setting invalid volume (should be handled by CLI, but test daemon robustness)
+	invalidCmd := shared.Command{Type: shared.CmdVolume, Volume: 150}
+	resp = server.HandleCommand(invalidCmd)
+
+	// The daemon should still try to set it, and the player should reject it
+	if resp.Success {
+		// The daemon accepted it, but let's check if player rejected it
+		status = server.player.GetStatus()
+		if status.Volume > 1.0 {
+			t.Error("Player should not allow volume > 1.0")
+		}
 	}
 }
 

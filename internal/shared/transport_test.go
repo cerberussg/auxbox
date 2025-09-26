@@ -33,6 +33,16 @@ func TestCommand_ToJSON(t *testing.T) {
 			wantJSON: `{"type":"exit"}`,
 		},
 		{
+			name:     "volume command get current",
+			command:  Command{Type: CmdVolume, Volume: -1},
+			wantJSON: `{"type":"volume","volume":-1}`,
+		},
+		{
+			name:     "volume command set 75%",
+			command:  Command{Type: CmdVolume, Volume: 75},
+			wantJSON: `{"type":"volume","volume":75}`,
+		},
+		{
 			name:     "skip command with count",
 			command:  Command{Type: CmdSkip, Count: 3},
 			wantJSON: `{"type":"skip","count":3}`,
@@ -63,10 +73,11 @@ func TestCommand_ToJSON(t *testing.T) {
 				Type:   CmdSkip,
 				Args:   []string{"--verbose"},
 				Count:  5,
+				Volume: 80,
 				Source: SourcePlaylist,
 				Path:   "/path/to/playlist.m3u",
 			},
-			wantJSON: `{"type":"skip","args":["--verbose"],"count":5,"source":"playlist","path":"/path/to/playlist.m3u"}`,
+			wantJSON: `{"type":"skip","args":["--verbose"],"count":5,"volume":80,"source":"playlist","path":"/path/to/playlist.m3u"}`,
 		},
 	}
 
@@ -120,6 +131,16 @@ func TestCommandFromJSON(t *testing.T) {
 			name: "exit command",
 			json: `{"type":"exit"}`,
 			want: Command{Type: CmdExit},
+		},
+		{
+			name: "volume command get current",
+			json: `{"type":"volume","volume":-1}`,
+			want: Command{Type: CmdVolume, Volume: -1},
+		},
+		{
+			name: "volume command set 50%",
+			json: `{"type":"volume","volume":50}`,
+			want: Command{Type: CmdVolume, Volume: 50},
 		},
 		{
 			name: "skip command with count",
@@ -308,6 +329,8 @@ func TestRoundTripSerialization(t *testing.T) {
 		{Type: CmdExit},
 		{Type: CmdSkip, Count: 5},
 		{Type: CmdBack, Count: 2},
+		{Type: CmdVolume, Volume: 75},
+		{Type: CmdVolume, Volume: -1},
 		{Type: CmdStart, Source: SourceFolder, Path: "/path/to/music"},
 		{Type: CmdStart, Source: SourcePlaylist, Path: "/path/to/playlist.m3u"},
 		{Type: CmdList, Args: []string{"--verbose", "--format", "json"}},
@@ -375,7 +398,7 @@ func TestRoundTripSerialization(t *testing.T) {
 // Helper functions for deep comparison
 
 func commandsEqual(a, b Command) bool {
-	if a.Type != b.Type || a.Count != b.Count || a.Source != b.Source || a.Path != b.Path {
+	if a.Type != b.Type || a.Count != b.Count || a.Volume != b.Volume || a.Source != b.Source || a.Path != b.Path {
 		return false
 	}
 	if len(a.Args) != len(b.Args) {

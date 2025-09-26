@@ -97,6 +97,8 @@ func (s *Server) handleCommand(cmd shared.Command) shared.Response {
 		return s.handleListCommand()
 	case shared.CmdStop:
 		return s.handleStopCommand()
+	case shared.CmdVolume:
+		return s.handleVolumeCommand(cmd)
 	case shared.CmdExit:
 		return s.handleExitCommand()
 	default:
@@ -327,6 +329,41 @@ func (s *Server) handleStopCommand() shared.Response {
 
 	log.Println("Playback stopped")
 	return shared.NewSuccessResponse("Playback stopped", nil)
+}
+
+func (s *Server) handleVolumeCommand(cmd shared.Command) shared.Response {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// If volume is -1, return current volume
+	if cmd.Volume == -1 {
+		status := s.player.GetStatus()
+		volumePercent := int(status.Volume * 100)
+
+		volumeData := map[string]interface{}{
+			"volume": status.Volume, // 0.0-1.0 for API compatibility
+		}
+
+		return shared.NewSuccessResponse(
+			fmt.Sprintf("Volume: %d%%", volumePercent),
+			volumeData,
+		)
+	}
+
+	// Set volume (cmd.Volume is 0-100 percentage)
+	volumeFloat := float64(cmd.Volume) / 100.0
+
+	if err := s.player.SetVolume(volumeFloat); err != nil {
+		return shared.NewErrorResponse(fmt.Sprintf("Failed to set volume: %v", err))
+	}
+
+	log.Printf("Volume set to %d%%", cmd.Volume)
+
+	if cmd.Volume == 0 {
+		return shared.NewSuccessResponse("Volume set to 0% (muted)", nil)
+	}
+
+	return shared.NewSuccessResponse(fmt.Sprintf("Volume set to %d%%", cmd.Volume), nil)
 }
 
 func (s *Server) handleExitCommand() shared.Response {

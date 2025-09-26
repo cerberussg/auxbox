@@ -44,6 +44,10 @@ func NewStopCommand() Command {
 	return Command{Type: CmdStop}
 }
 
+func NewVolumeCommand(volume int) Command {
+	return Command{Type: CmdVolume, Volume: volume}
+}
+
 func NewExitCommand() Command {
 	return Command{Type: CmdExit}
 }

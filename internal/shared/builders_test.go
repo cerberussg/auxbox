@@ -140,6 +140,39 @@ func TestNewStopCommand(t *testing.T) {
 	}
 }
 
+func TestNewVolumeCommand(t *testing.T) {
+	tests := []struct {
+		name   string
+		volume int
+		want   Command
+	}{
+		{"get current volume", -1, Command{Type: CmdVolume, Volume: -1}},
+		{"set volume to 50%", 50, Command{Type: CmdVolume, Volume: 50}},
+		{"mute volume", 0, Command{Type: CmdVolume, Volume: 0}},
+		{"max volume", 100, Command{Type: CmdVolume, Volume: 100}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := NewVolumeCommand(tt.volume)
+			if got.Type != tt.want.Type {
+				t.Errorf("NewVolumeCommand() Type = %v, want %v", got.Type, tt.want.Type)
+			}
+			if got.Volume != tt.want.Volume {
+				t.Errorf("NewVolumeCommand() Volume = %v, want %v", got.Volume, tt.want.Volume)
+			}
+		})
+	}
+}
+
+func TestNewExitCommand(t *testing.T) {
+	cmd := NewExitCommand()
+
+	if cmd.Type != CmdExit {
+		t.Errorf("NewExitCommand() Type = %v, want %v", cmd.Type, CmdExit)
+	}
+}
+
 func TestNewSuccessResponse(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -207,6 +240,7 @@ func TestBuilderConsistency(t *testing.T) {
 		NewStatusCommand(),
 		NewListCommand(),
 		NewStopCommand(),
+		NewExitCommand(),
 	}
 
 	for i, cmd := range commands {

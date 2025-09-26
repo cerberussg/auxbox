@@ -9,11 +9,12 @@ const (
 	CmdExit  CommandType = "exit"
 
 	// Playback control
-	CmdPlay  CommandType = "play"
-	CmdPause CommandType = "pause"
-	CmdStop  CommandType = "stop"
-	CmdSkip  CommandType = "skip"
-	CmdBack  CommandType = "back"
+	CmdPlay   CommandType = "play"
+	CmdPause  CommandType = "pause"
+	CmdStop   CommandType = "stop"
+	CmdSkip   CommandType = "skip"
+	CmdBack   CommandType = "back"
+	CmdVolume CommandType = "volume"
 
 	// Info commands
 	CmdStatus CommandType = "status"
@@ -25,6 +26,7 @@ type Command struct {
 	Type   CommandType `json:"type"`
 	Args   []string    `json:"args,omitempty"`
 	Count  int         `json:"count,omitempty"`  // For skip/back amounts (default 1)
+	Volume int         `json:"volume,omitempty"` // For volume commands (0-100, -1 = get current)
 	Source SourceType  `json:"source,omitempty"` // For start command
 	Path   string      `json:"path,omitempty"`   // Path to folder/playlist/etc
 }
