@@ -2,11 +2,15 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/cerberussg/auxbox/internal/daemon"
 	"github.com/cerberussg/auxbox/internal/shared"
 )
 
@@ -19,11 +23,12 @@ Usage:
   auxbox start --playlist <path>   Start daemon with playlist source
   auxbox play                      Start/resume playback
   auxbox pause                     Pause playback
+  auxbox stop                      Stop playback (reset to beginning)
   auxbox skip [n]                  Skip forward n tracks (default: 1)
   auxbox back [n]                  Skip backward n tracks (default: 1)
   auxbox status                    Show current track info
   auxbox list                      List tracks in current queue
-  auxbox stop                      Stop daemon
+  auxbox exit                      Exit daemon (stop everything)
   auxbox --help, -h                Show this help
   auxbox --version, -v             Show version
 
@@ -31,7 +36,8 @@ Examples:
   auxbox start --folder ~/Downloads/new-pack/
   auxbox skip 3
   auxbox back
-  auxbox status`
+  auxbox stop
+  auxbox exit`
 )
 
 // CLI handles command line interface logic
@@ -62,6 +68,14 @@ func (c *CLI) Run(args []string) {
 	case "--version", "-v", "version":
 		fmt.Printf("auxbox %s\n", version)
 		os.Exit(0)
+	case "_daemon":
+		// Internal daemon process - parse source type and path
+		if len(args) < 4 {
+			log.Fatal("Daemon process requires source type and path")
+		}
+		sourceType := shared.SourceType(args[2])
+		sourcePath := args[3]
+		c.runDaemonProcess(sourceType, sourcePath)
 	case "start":
 		c.handleStartCommand(args)
 	case "play":
@@ -78,6 +92,8 @@ func (c *CLI) Run(args []string) {
 		c.sendCommand(shared.NewListCommand())
 	case "stop":
 		c.sendCommand(shared.NewStopCommand())
+	case "exit":
+		c.sendCommand(shared.NewExitCommand())
 	default:
 		fmt.Printf("Unknown command: %s\nUse 'auxbox --help' for usage.\n", command)
 		os.Exit(1)
@@ -121,13 +137,10 @@ func (c *CLI) handleStartCommand(args []string) {
 	}
 
 	// Start daemon
-	cmd := shared.NewStartCommand(sourceType, sourcePath)
 	fmt.Printf("Starting auxbox daemon with %s: %s\n", sourceType, sourcePath)
 
-	// TODO: This will actually start the daemon process
-	// For now, just show what we would do
-	fmt.Printf("Would start daemon with command: %+v\n", cmd)
-	fmt.Printf("Daemon functionality coming in next phase!\n")
+	// Start the daemon in current process
+	c.startDaemon(sourceType, sourcePath)
 }
 
 func (c *CLI) handleSkipCommand(args []string) {
@@ -187,7 +200,9 @@ func (c *CLI) sendCommand(cmd shared.Command) {
 	case shared.CmdList:
 		c.printListResponse(resp)
 	case shared.CmdStop:
-		fmt.Println("auxbox daemon stopped.")
+		fmt.Println("Playback stopped.")
+	case shared.CmdExit:
+		fmt.Println("auxbox daemon exited.")
 	default:
 		if resp.Message != "" {
 			fmt.Println(resp.Message)
@@ -283,6 +298,72 @@ func (c *CLI) getStringFromMap(m map[string]interface{}, key, defaultValue strin
 		}
 	}
 	return defaultValue
+}
+
+// startDaemon starts the daemon server as a background process
+func (c *CLI) startDaemon(sourceType shared.SourceType, sourcePath string) {
+	// Check if we're being called as the daemon itself
+	if len(os.Args) >= 3 && os.Args[1] == "_daemon" {
+		c.runDaemonProcess(sourceType, sourcePath)
+		return
+	}
+
+	// Spawn daemon as background process
+	executable, err := os.Executable()
+	if err != nil {
+		fmt.Printf("Failed to get executable path: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Start daemon process with special flag
+	cmd := exec.Command(executable, "_daemon", string(sourceType), sourcePath)
+
+	// Redirect stdout/stderr to avoid output mixing
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+
+	err = cmd.Start()
+	if err != nil {
+		fmt.Printf("Failed to start daemon: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Give daemon a moment to start
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify daemon is running
+	transport := shared.NewUnixSocketTransport()
+	if !transport.IsRunning() {
+		fmt.Println("Failed to start daemon - not responding")
+		os.Exit(1)
+	}
+
+	// Send initial load command to daemon
+	startCmd := shared.NewStartCommand(sourceType, sourcePath)
+	resp, err := transport.Send(startCmd)
+	if err != nil {
+		fmt.Printf("Failed to initialize daemon: %v\n", err)
+		os.Exit(1)
+	}
+
+	if !resp.Success {
+		fmt.Printf("Failed to load source: %s\n", resp.Message)
+		os.Exit(1)
+	}
+
+	fmt.Printf("✓ %s\n", resp.Message)
+	fmt.Println("auxbox daemon started in background. Use 'auxbox play' to start playback.")
+}
+
+// runDaemonProcess runs the actual daemon server (called by background process)
+func (c *CLI) runDaemonProcess(sourceType shared.SourceType, sourcePath string) {
+	server := daemon.NewServer()
+
+	// Start the server (this will block)
+	if err := server.Start(); err != nil {
+		log.Printf("Daemon error: %v", err)
+		os.Exit(1)
+	}
 }
 
 func (c *CLI) getIntFromMap(m map[string]interface{}, key string, defaultValue int) int {

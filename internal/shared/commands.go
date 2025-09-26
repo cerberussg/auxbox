@@ -1,20 +1,26 @@
 package shared
 
+// CommandType represents the type of command being sent
 type CommandType string
 
 const (
+	// Daemon management
 	CmdStart CommandType = "start"
-	CmdStop  CommandType = "stop"
+	CmdExit  CommandType = "exit"
 
+	// Playback control
 	CmdPlay  CommandType = "play"
 	CmdPause CommandType = "pause"
+	CmdStop  CommandType = "stop"
 	CmdSkip  CommandType = "skip"
 	CmdBack  CommandType = "back"
 
+	// Info commands
 	CmdStatus CommandType = "status"
 	CmdList   CommandType = "list"
 )
 
+// Command represents a command sent to the daemon
 type Command struct {
 	Type   CommandType `json:"type"`
 	Args   []string    `json:"args,omitempty"`
@@ -23,6 +29,7 @@ type Command struct {
 	Path   string      `json:"path,omitempty"`   // Path to folder/playlist/etc
 }
 
+// Response represents a response from the daemon
 type Response struct {
 	Success bool        `json:"success"`
 	Message string      `json:"message,omitempty"`

@@ -1,5 +1,6 @@
 package shared
 
+// SourceType represents different audio sources
 type SourceType string
 
 const (
@@ -9,6 +10,14 @@ const (
 	SourceDiscord  SourceType = "discord" // Future
 )
 
+// Track represents a single audio track
+type Track struct {
+	Filename string `json:"filename"`
+	Path     string `json:"path"`
+	Duration string `json:"duration,omitempty"` // Will be populated when track is loaded
+}
+
+// TrackInfo represents information about the currently playing track
 type TrackInfo struct {
 	Filename    string `json:"filename"`
 	Path        string `json:"path"`
@@ -19,6 +28,7 @@ type TrackInfo struct {
 	Source      string `json:"source,omitempty"`       // Source folder/playlist name
 }
 
+// PlaylistInfo represents the current playlist/queue
 type PlaylistInfo struct {
 	Source     string   `json:"source"`      // Folder path or playlist name
 	SourceType string   `json:"source_type"` // "folder", "playlist", etc

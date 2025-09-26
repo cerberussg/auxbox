@@ -2,6 +2,7 @@ package shared
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 )
 
@@ -17,14 +18,39 @@ func TestCommand_ToJSON(t *testing.T) {
 			wantJSON: `{"type":"play"}`,
 		},
 		{
+			name:     "simple pause command",
+			command:  Command{Type: CmdPause},
+			wantJSON: `{"type":"pause"}`,
+		},
+		{
+			name:     "stop command",
+			command:  Command{Type: CmdStop},
+			wantJSON: `{"type":"stop"}`,
+		},
+		{
+			name:     "exit command",
+			command:  Command{Type: CmdExit},
+			wantJSON: `{"type":"exit"}`,
+		},
+		{
 			name:     "skip command with count",
 			command:  Command{Type: CmdSkip, Count: 3},
 			wantJSON: `{"type":"skip","count":3}`,
 		},
 		{
+			name:     "back command with count",
+			command:  Command{Type: CmdBack, Count: 2},
+			wantJSON: `{"type":"back","count":2}`,
+		},
+		{
 			name:     "start command with folder source",
 			command:  Command{Type: CmdStart, Source: SourceFolder, Path: "/home/user/music"},
 			wantJSON: `{"type":"start","source":"folder","path":"/home/user/music"}`,
+		},
+		{
+			name:     "start command with playlist source",
+			command:  Command{Type: CmdStart, Source: SourcePlaylist, Path: "/home/user/playlist.m3u"},
+			wantJSON: `{"type":"start","source":"playlist","path":"/home/user/playlist.m3u"}`,
 		},
 		{
 			name:     "command with args",
@@ -81,9 +107,29 @@ func TestCommandFromJSON(t *testing.T) {
 			want: Command{Type: CmdPlay},
 		},
 		{
+			name: "simple pause command",
+			json: `{"type":"pause"}`,
+			want: Command{Type: CmdPause},
+		},
+		{
+			name: "stop command",
+			json: `{"type":"stop"}`,
+			want: Command{Type: CmdStop},
+		},
+		{
+			name: "exit command",
+			json: `{"type":"exit"}`,
+			want: Command{Type: CmdExit},
+		},
+		{
 			name: "skip command with count",
 			json: `{"type":"skip","count":3}`,
 			want: Command{Type: CmdSkip, Count: 3},
+		},
+		{
+			name: "back command with count",
+			json: `{"type":"back","count":2}`,
+			want: Command{Type: CmdBack, Count: 2},
 		},
 		{
 			name: "start command with folder source",
@@ -91,9 +137,24 @@ func TestCommandFromJSON(t *testing.T) {
 			want: Command{Type: CmdStart, Source: SourceFolder, Path: "/home/user/music"},
 		},
 		{
+			name: "start command with playlist source",
+			json: `{"type":"start","source":"playlist","path":"/home/user/playlist.m3u"}`,
+			want: Command{Type: CmdStart, Source: SourcePlaylist, Path: "/home/user/playlist.m3u"},
+		},
+		{
 			name: "command with args",
 			json: `{"type":"list","args":["--format","json"]}`,
 			want: Command{Type: CmdList, Args: []string{"--format", "json"}},
+		},
+		{
+			name: "status command",
+			json: `{"type":"status"}`,
+			want: Command{Type: CmdStatus},
+		},
+		{
+			name: "list command",
+			json: `{"type":"list"}`,
+			want: Command{Type: CmdList},
 		},
 		{
 			name:    "invalid JSON",
@@ -139,7 +200,7 @@ func TestResponse_ToJSON(t *testing.T) {
 			wantJSON: `{"success":false,"message":"File not found"}`,
 		},
 		{
-			name: "response with data",
+			name: "response with track data",
 			response: Response{
 				Success: true,
 				Message: "Current status",
@@ -149,6 +210,20 @@ func TestResponse_ToJSON(t *testing.T) {
 				},
 			},
 			wantJSON: `{"success":true,"message":"Current status","data":{"filename":"test.mp3","path":"","duration":"3:45"}}`,
+		},
+		{
+			name: "response with playlist data",
+			response: Response{
+				Success: true,
+				Message: "Track list",
+				Data: PlaylistInfo{
+					Source:     "/path/to/music",
+					SourceType: "folder",
+					Tracks:     []string{"track1.mp3", "track2.mp3"},
+					CurrentIdx: 0,
+				},
+			},
+			wantJSON: `{"success":true,"message":"Track list","data":{"source":"/path/to/music","source_type":"folder","tracks":["track1.mp3","track2.mp3"],"current_idx":0}}`,
 		},
 	}
 
@@ -193,7 +268,7 @@ func TestResponseFromJSON(t *testing.T) {
 			want: Response{Success: false, Message: "File not found"},
 		},
 		{
-			name: "response with complex data",
+			name: "response with simple data",
 			json: `{"success":true,"data":{"filename":"test.mp3","duration":"3:45"}}`,
 			want: Response{Success: true, Data: map[string]interface{}{"filename": "test.mp3", "duration": "3:45"}},
 		},
@@ -202,6 +277,11 @@ func TestResponseFromJSON(t *testing.T) {
 			json:    `{"success":true`,
 			want:    Response{},
 			wantErr: true,
+		},
+		{
+			name: "empty response",
+			json: `{}`,
+			want: Response{Success: false}, // Success defaults to false
 		},
 	}
 
@@ -221,59 +301,75 @@ func TestResponseFromJSON(t *testing.T) {
 
 func TestRoundTripSerialization(t *testing.T) {
 	// Test that we can serialize and deserialize without losing data
-	originalCmd := Command{
-		Type:   CmdStart,
-		Args:   []string{"--verbose", "--shuffle"},
-		Count:  42,
-		Source: SourceFolder,
-		Path:   "/path/to/music",
+	testCommands := []Command{
+		{Type: CmdPlay},
+		{Type: CmdPause},
+		{Type: CmdStop},
+		{Type: CmdExit},
+		{Type: CmdSkip, Count: 5},
+		{Type: CmdBack, Count: 2},
+		{Type: CmdStart, Source: SourceFolder, Path: "/path/to/music"},
+		{Type: CmdStart, Source: SourcePlaylist, Path: "/path/to/playlist.m3u"},
+		{Type: CmdList, Args: []string{"--verbose", "--format", "json"}},
+		{Type: CmdStatus},
 	}
 
-	// Command round trip
-	cmdJSON, err := originalCmd.ToJSON()
-	if err != nil {
-		t.Fatalf("Failed to serialize command: %v", err)
+	for i, originalCmd := range testCommands {
+		t.Run(string(originalCmd.Type), func(t *testing.T) {
+			// Command round trip
+			cmdJSON, err := originalCmd.ToJSON()
+			if err != nil {
+				t.Fatalf("Failed to serialize command: %v", err)
+			}
+
+			deserializedCmd, err := CommandFromJSON(cmdJSON)
+			if err != nil {
+				t.Fatalf("Failed to deserialize command: %v", err)
+			}
+
+			if !commandsEqual(originalCmd, deserializedCmd) {
+				t.Errorf("Command %d round trip failed: got %+v, want %+v", i, deserializedCmd, originalCmd)
+			}
+		})
 	}
 
-	deserializedCmd, err := CommandFromJSON(cmdJSON)
-	if err != nil {
-		t.Fatalf("Failed to deserialize command: %v", err)
-	}
-
-	if !commandsEqual(originalCmd, deserializedCmd) {
-		t.Errorf("Command round trip failed: got %+v, want %+v", deserializedCmd, originalCmd)
-	}
-
-	// Response round trip
-	originalResp := Response{
-		Success: true,
-		Message: "All good",
-		Data: TrackInfo{
-			Filename:    "awesome_track.mp3",
-			Duration:    "4:20",
-			TrackNumber: 1,
-			TotalTracks: 10,
+	// Test response round trip
+	testResponses := []Response{
+		{Success: true, Message: "All good"},
+		{Success: false, Message: "Error occurred"},
+		{
+			Success: true,
+			Message: "Track info",
+			Data: TrackInfo{
+				Filename:    "awesome_track.mp3",
+				Duration:    "4:20",
+				TrackNumber: 1,
+				TotalTracks: 10,
+			},
 		},
 	}
 
-	respJSON, err := originalResp.ToJSON()
-	if err != nil {
-		t.Fatalf("Failed to serialize response: %v", err)
-	}
+	for i, originalResp := range testResponses {
+		t.Run(fmt.Sprintf("response_%d", i), func(t *testing.T) {
+			respJSON, err := originalResp.ToJSON()
+			if err != nil {
+				t.Fatalf("Failed to serialize response: %v", err)
+			}
 
-	deserializedResp, err := ResponseFromJSON(respJSON)
-	if err != nil {
-		t.Fatalf("Failed to deserialize response: %v", err)
-	}
+			deserializedResp, err := ResponseFromJSON(respJSON)
+			if err != nil {
+				t.Fatalf("Failed to deserialize response: %v", err)
+			}
 
-	if deserializedResp.Success != originalResp.Success {
-		t.Errorf("Response Success mismatch: got %v, want %v", deserializedResp.Success, originalResp.Success)
+			if deserializedResp.Success != originalResp.Success {
+				t.Errorf("Response Success mismatch: got %v, want %v", deserializedResp.Success, originalResp.Success)
+			}
+			if deserializedResp.Message != originalResp.Message {
+				t.Errorf("Response Message mismatch: got %v, want %v", deserializedResp.Message, originalResp.Message)
+			}
+			// Note: Data comparison is tricky because it becomes map[string]interface{} after JSON round trip
+		})
 	}
-	if deserializedResp.Message != originalResp.Message {
-		t.Errorf("Response Message mismatch: got %v, want %v", deserializedResp.Message, originalResp.Message)
-	}
-	// Note: Data comparison is tricky because it becomes map[string]interface{} after JSON round trip
-	// For production code, you'd want to handle this more carefully
 }
 
 // Helper functions for deep comparison
@@ -296,7 +392,6 @@ func commandsEqual(a, b Command) bool {
 func responsesEqual(a, b Response) bool {
 	return a.Success == b.Success && a.Message == b.Message
 	// Note: We're not comparing Data here because it's interface{} and gets complex after JSON marshaling
-	// In production, you'd want more sophisticated comparison
 }
 
 func mapsEqual(a, b map[string]interface{}) bool {
@@ -312,8 +407,7 @@ func mapsEqual(a, b map[string]interface{}) bool {
 }
 
 func valuesEqual(a, b interface{}) bool {
-	// Simple equality check - marshal both and compare JSON strings
-	// This handles the basic types we use in our JSON
+	// Marshal both and compare JSON strings
 	aJSON, aErr := json.Marshal(a)
 	bJSON, bErr := json.Marshal(b)
 
