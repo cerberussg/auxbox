@@ -34,15 +34,15 @@ go.work.sum
 ehthumbs.db
 Thumbs.db
 
-# auxbox specific
-/auxbox
-/auxbox.exe
+# auxbox specific - only built binary, not source folders
 *.sock
 
-# Build artifacts
+# Build artifacts - only ignore build outputs, not source dirs
 /build/
 /dist/
 /bin/
+/auxbox
+/auxbox.exe
 
 # Logs
 *.log
