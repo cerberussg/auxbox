@@ -1,5 +1,7 @@
 package shared
 
+// Command builders - helper methods for creating common commands
+
 func NewPlayCommand() Command {
 	return Command{Type: CmdPlay}
 }
@@ -41,6 +43,12 @@ func NewListCommand() Command {
 func NewStopCommand() Command {
 	return Command{Type: CmdStop}
 }
+
+func NewExitCommand() Command {
+	return Command{Type: CmdExit}
+}
+
+// Response builders - helper methods for creating common responses
 
 func NewSuccessResponse(message string, data interface{}) Response {
 	return Response{
