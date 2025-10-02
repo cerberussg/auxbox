@@ -30,6 +30,11 @@ func NewServer() *Server {
 	}
 }
 
+// LoadTracks loads tracks into the server's playlist
+func (s *Server) LoadTracks(tracks []*shared.Track, source string, sourceType shared.SourceType) error {
+	return s.playlist.LoadTracks(tracks, source, sourceType)
+}
+
 // Start starts the daemon server
 func (s *Server) Start() error {
 	s.mu.Lock()
@@ -129,11 +134,11 @@ func (s *Server) handleStartCommand(cmd shared.Command) shared.Response {
 	// Load tracks based on source type
 	switch cmd.Source {
 	case shared.SourceFolder:
-		if err := s.loadFolder(expandedPath); err != nil {
+		if err := s.LoadFolder(expandedPath); err != nil {
 			return shared.NewErrorResponse(fmt.Sprintf("Failed to load folder: %v", err))
 		}
 	case shared.SourcePlaylist:
-		if err := s.loadPlaylist(expandedPath); err != nil {
+		if err := s.LoadPlaylist(expandedPath); err != nil {
 			return shared.NewErrorResponse(fmt.Sprintf("Failed to load playlist: %v", err))
 		}
 	default:
@@ -162,15 +167,47 @@ func (s *Server) handlePlayCommand() shared.Response {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if s.playlist.TrackCount() == 0 {
+	trackCount := s.playlist.TrackCount()
+	log.Printf("Play request - Track count: %d", trackCount)
+
+	if trackCount == 0 {
 		return shared.NewErrorResponse("No tracks loaded. Use 'auxbox start --folder <path>' first.")
 	}
 
 	// Ensure player has current track (in case it got out of sync)
-	if s.player.GetCurrentTrack() == nil {
-		currentTrack := s.playlist.GetCurrentTrack()
-		if currentTrack != nil {
+	playerTrack := s.player.GetCurrentTrack()
+	log.Printf("Player current track: %v", playerTrack)
+
+	if playerTrack == nil {
+		// Try to find a valid track, skipping any that fail to load
+		maxAttempts := 10 // Don't try forever
+		for attempts := 0; attempts < maxAttempts; attempts++ {
+			currentTrack := s.playlist.GetCurrentTrack()
+			log.Printf("Playlist current track: %v", currentTrack)
+
+			if currentTrack == nil {
+				return shared.NewErrorResponse("No track available from playlist")
+			}
+
+			log.Printf("Setting track: %s", currentTrack.Path)
 			s.player.SetCurrentTrack(currentTrack)
+
+			// Check if the track loaded successfully
+			if s.player.GetCurrentTrack() != nil {
+				log.Printf("Successfully loaded track: %s", currentTrack.Filename)
+				break
+			}
+
+			// Track failed to load, try next one
+			log.Printf("Track failed to load, trying next track...")
+			if !s.playlist.Next() {
+				return shared.NewErrorResponse("No valid tracks found in playlist")
+			}
+		}
+
+		// If we still don't have a track after trying, give up
+		if s.player.GetCurrentTrack() == nil {
+			return shared.NewErrorResponse("Failed to load any valid tracks after multiple attempts")
 		}
 	}
 
@@ -399,7 +436,9 @@ func (s *Server) expandPath(path string) (string, error) {
 	return absPath, nil
 }
 
-func (s *Server) loadFolder(folderPath string) error {
+func (s *Server) LoadFolder(folderPath string) error {
+	log.Printf("LoadFolder: Starting scan of %s", folderPath)
+
 	// Supported audio extensions
 	supportedExts := map[string]bool{
 		".mp3":  true,
@@ -412,6 +451,7 @@ func (s *Server) loadFolder(folderPath string) error {
 
 	err := filepath.Walk(folderPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
+			log.Printf("LoadFolder: Walk error on %s: %v", path, err)
 			return err
 		}
 
@@ -419,26 +459,45 @@ func (s *Server) loadFolder(folderPath string) error {
 			return nil
 		}
 
+		// Skip hidden files and macOS metadata files
+		filename := info.Name()
+		if strings.HasPrefix(filename, ".") || strings.HasPrefix(filename, "._") {
+			return nil
+		}
+
 		ext := strings.ToLower(filepath.Ext(path))
 		if supportedExts[ext] {
 			track := &shared.Track{
-				Filename: info.Name(),
+				Filename: filename,
 				Path:     path,
 			}
 			tracks = append(tracks, track)
+			if len(tracks) <= 3 { // Log first few tracks for debugging
+				log.Printf("LoadFolder: Found track %d: %s", len(tracks), track.Filename)
+			}
 		}
 
 		return nil
 	})
 
 	if err != nil {
+		log.Printf("LoadFolder: Walk failed: %v", err)
 		return err
 	}
 
-	return s.playlist.LoadTracks(tracks, folderPath, shared.SourceFolder)
+	log.Printf("LoadFolder: Found %d total tracks", len(tracks))
+
+	err = s.playlist.LoadTracks(tracks, folderPath, shared.SourceFolder)
+	if err != nil {
+		log.Printf("LoadFolder: LoadTracks failed: %v", err)
+		return err
+	}
+
+	log.Printf("LoadFolder: Successfully loaded %d tracks into playlist", len(tracks))
+	return nil
 }
 
-func (s *Server) loadPlaylist(playlistPath string) error {
+func (s *Server) LoadPlaylist(playlistPath string) error {
 	// TODO: Implement playlist file parsing (M3U, PLS, etc.)
 	// For now, just return an error
 	return fmt.Errorf("playlist loading not yet implemented")

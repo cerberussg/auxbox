@@ -411,6 +411,25 @@ func (c *CLI) startDaemon(sourceType shared.SourceType, sourcePath string) {
 func (c *CLI) runDaemonProcess(sourceType shared.SourceType, sourcePath string) {
 	server := daemon.NewServer()
 
+	// Load tracks based on source type and path before starting server
+	log.Printf("Loading tracks from %s (type: %s)", sourcePath, sourceType)
+
+	switch sourceType {
+	case shared.SourceFolder:
+		if err := server.LoadFolder(sourcePath); err != nil {
+			log.Printf("Failed to load tracks from folder: %v", err)
+			os.Exit(1)
+		}
+	case shared.SourcePlaylist:
+		if err := server.LoadPlaylist(sourcePath); err != nil {
+			log.Printf("Failed to load tracks from playlist: %v", err)
+			os.Exit(1)
+		}
+	default:
+		log.Printf("Unsupported source type: %s", sourceType)
+		os.Exit(1)
+	}
+
 	// Start the server (this will block)
 	if err := server.Start(); err != nil {
 		log.Printf("Daemon error: %v", err)

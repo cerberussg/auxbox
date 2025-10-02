@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/gopxl/beep/v2/effects"
 	"github.com/gopxl/beep/v2/mp3"
 	"github.com/gopxl/beep/v2/speaker"
+	"github.com/gopxl/beep/v2/wav"
 )
 
 // Player handles audio playback using the beep library
@@ -178,11 +180,14 @@ func (p *Player) SetCurrentTrack(track *shared.Track) {
 	}
 
 	// Load the new audio file
+	fmt.Printf("Loading audio file: %s\n", track.Path)
 	if err := p.loadAudioFile(track.Path); err != nil {
 		fmt.Printf("Error loading audio file %s: %v\n", track.Path, err)
 		p.status.Duration = "0:00"
+		p.currentTrack = nil // Reset track on failure
 		return
 	}
+	fmt.Printf("Audio file loaded successfully: %s\n", track.Path)
 
 	// If we were playing before, start playing the new track
 	if wasPlaying {
@@ -324,14 +329,24 @@ func (p *Player) loadAudioFile(filePath string) error {
 		p.format = format
 		p.file = file
 
+	case ".wav":
+		streamer, format, err := wav.Decode(file)
+		if err != nil {
+			file.Close()
+			return fmt.Errorf("failed to decode WAV: %w", err)
+		}
+		p.streamer = streamer
+		p.format = format
+		p.file = file
+
 	default:
 		file.Close()
-		return fmt.Errorf("unsupported audio format: %s", ext)
+		return fmt.Errorf("unsupported audio format: %s (supported: .mp3, .wav)", ext)
 	}
 
 	// Initialize speaker if not already done
 	if !p.speakerInit {
-		err := speaker.Init(p.format.SampleRate, p.format.SampleRate.N(time.Second/10))
+		err := p.initializeSpeakerWithFallbacks()
 		if err != nil {
 			p.cleanup()
 			return fmt.Errorf("failed to initialize speaker: %w", err)
@@ -343,7 +358,14 @@ func (p *Player) loadAudioFile(filePath string) error {
 	p.calculateDuration()
 
 	// Set up volume control
+	fmt.Printf("Setting up volume control...\n")
 	p.setupVolumeControl()
+
+	// Verify control was set up properly
+	if p.ctrl == nil {
+		return fmt.Errorf("volume control setup failed - ctrl is nil")
+	}
+	fmt.Printf("Volume control setup complete\n")
 
 	return nil
 }
@@ -428,6 +450,73 @@ func (p *Player) cleanup() {
 	}
 	p.volumeStreamer = nil
 	p.ctrl = nil
+}
+
+// initializeSpeakerWithFallbacks attempts to initialize the speaker with multiple fallback strategies
+func (p *Player) initializeSpeakerWithFallbacks() error {
+	if p.format.SampleRate == 0 {
+		return fmt.Errorf("invalid sample rate: %d", p.format.SampleRate)
+	}
+
+	// Strategy 1: Standard initialization with current format
+	bufferSize := p.format.SampleRate.N(time.Second / 10)
+	err := speaker.Init(p.format.SampleRate, bufferSize)
+	if err == nil {
+		fmt.Printf("Audio initialized successfully with sample rate: %d Hz, buffer size: %d\n",
+			p.format.SampleRate, bufferSize)
+		return nil
+	}
+
+	fmt.Printf("Primary audio initialization failed: %v\n", err)
+
+	// Strategy 2: Try with larger buffer for stability
+	bufferSize = p.format.SampleRate.N(time.Second / 5)
+	err = speaker.Init(p.format.SampleRate, bufferSize)
+	if err == nil {
+		fmt.Printf("Audio initialized with larger buffer: %d Hz, buffer size: %d\n",
+			p.format.SampleRate, bufferSize)
+		return nil
+	}
+
+	fmt.Printf("Large buffer initialization failed: %v\n", err)
+
+	// Strategy 3: Try with common sample rates as fallbacks
+	fallbackRates := []beep.SampleRate{44100, 48000, 22050, 16000}
+	for _, rate := range fallbackRates {
+		if rate == p.format.SampleRate {
+			continue // Already tried this rate
+		}
+
+		bufferSize = rate.N(time.Second / 10)
+		err = speaker.Init(rate, bufferSize)
+		if err == nil {
+			fmt.Printf("Audio initialized with fallback sample rate: %d Hz (original: %d Hz)\n",
+				rate, p.format.SampleRate)
+			// Update format to match what was actually initialized
+			p.format.SampleRate = rate
+			return nil
+		}
+		fmt.Printf("Fallback rate %d Hz failed: %v\n", rate, err)
+	}
+
+	// Strategy 4: Platform-specific troubleshooting hints
+	platformHint := p.getPlatformAudioHint()
+
+	return fmt.Errorf("all audio initialization strategies failed. %s. Last error: %w", platformHint, err)
+}
+
+// getPlatformAudioHint provides platform-specific troubleshooting information
+func (p *Player) getPlatformAudioHint() string {
+	switch runtime.GOOS {
+	case "linux":
+		return "On Linux, ensure ALSA is installed and configured. Try: 'sudo apt install libasound2-dev' (Ubuntu/Debian) or 'sudo pacman -S alsa-lib' (Arch). Check if your user is in the 'audio' group"
+	case "darwin":
+		return "On macOS, ensure Xcode command line tools are installed: 'xcode-select --install'. AudioToolbox.framework should be available"
+	case "windows":
+		return "On Windows, ensure audio drivers are properly installed and no other application is exclusively using the audio device"
+	default:
+		return "Check that audio drivers and development libraries are installed for your platform"
+	}
 }
 
 // formatDuration converts time.Duration to MM:SS format
