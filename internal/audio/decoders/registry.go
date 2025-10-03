@@ -1,8 +1,9 @@
-package daemon
+package decoders
 
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/gopxl/beep/v2"
 )
@@ -54,4 +55,17 @@ func (r *FormatRegistry) GetSupportedExtensions() []string {
 		extensions = append(extensions, ext)
 	}
 	return extensions
+}
+
+// getFileExtension returns the lowercase file extension
+func getFileExtension(filePath string) string {
+	for i := len(filePath) - 1; i >= 0; i-- {
+		if filePath[i] == '.' {
+			return strings.ToLower(filePath[i:])
+		}
+		if filePath[i] == '/' || filePath[i] == '\\' {
+			break
+		}
+	}
+	return ""
 }

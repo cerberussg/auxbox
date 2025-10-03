@@ -1,4 +1,4 @@
-package daemon
+package audio
 
 // PlayerStatus represents the current state of the audio player
 type PlayerStatus struct {

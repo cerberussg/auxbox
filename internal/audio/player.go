@@ -1,4 +1,4 @@
-package daemon
+package audio
 
 import (
 	"fmt"
@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cerberussg/auxbox/internal/audio/decoders"
 	"github.com/cerberussg/auxbox/internal/shared"
 	"github.com/gopxl/beep/v2"
 	"github.com/gopxl/beep/v2/speaker"
@@ -30,7 +31,7 @@ type Player struct {
 	audioSystem     *AudioSystem
 	volumeControl   *VolumeControl
 	positionTracker *PositionTracker
-	registry        *FormatRegistry
+	registry        *decoders.FormatRegistry
 }
 
 // NewPlayer creates a new audio player instance
@@ -46,7 +47,7 @@ func NewPlayer() *Player {
 		audioSystem:     NewAudioSystem(),
 		volumeControl:   NewVolumeControl(),
 		positionTracker: NewPositionTracker(),
-		registry:        NewFormatRegistry(),
+		registry:        decoders.NewFormatRegistry(),
 	}
 }
 

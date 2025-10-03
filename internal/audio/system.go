@@ -1,4 +1,4 @@
-package daemon
+package audio
 
 import (
 	"fmt"

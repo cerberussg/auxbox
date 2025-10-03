@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cerberussg/auxbox/internal/daemon"
+	"github.com/cerberussg/auxbox/internal/server"
 	"github.com/cerberussg/auxbox/internal/shared"
 )
 
@@ -409,7 +409,7 @@ func (c *CLI) startDaemon(sourceType shared.SourceType, sourcePath string) {
 
 // runDaemonProcess runs the actual daemon server (called by background process)
 func (c *CLI) runDaemonProcess(sourceType shared.SourceType, sourcePath string) {
-	server := daemon.NewServer()
+	server := server.NewServer()
 
 	// Load tracks based on source type and path before starting server
 	log.Printf("Loading tracks from %s (type: %s)", sourcePath, sourceType)

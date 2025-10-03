@@ -1,4 +1,4 @@
-package daemon
+package audio
 
 import (
 	"sync"
@@ -151,7 +151,7 @@ func (pt *PositionTracker) updatePosition() {
 		if seeker, ok := pt.streamer.(beep.StreamSeeker); ok {
 			position := seeker.Position()
 			duration := pt.format.SampleRate.D(position)
-			pt.position = formatDuration(duration)
+			pt.position = FormatDuration(duration)
 		}
 	}
 }
@@ -173,7 +173,7 @@ func (pt *PositionTracker) calculateDuration() {
 
 		// Calculate duration
 		duration := pt.format.SampleRate.D(length)
-		pt.duration = formatDuration(duration)
+		pt.duration = FormatDuration(duration)
 	} else {
 		pt.duration = "Unknown"
 	}
