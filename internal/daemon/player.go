@@ -33,6 +33,10 @@ type Player struct {
 
 	// Callback for when track ends
 	onTrackComplete func()
+
+	// Position update ticker
+	positionTicker *time.Ticker
+	stopTicker     chan bool
 }
 
 // NewPlayer creates a new audio player instance
@@ -46,11 +50,15 @@ func NewPlayer() *Player {
 			Volume:    1.0,
 		},
 		speakerInit: false,
+		stopTicker:  make(chan bool),
 	}
 }
 
 // stopAndCleanup stops current playback and cleans up resources
 func (p *Player) stopAndCleanup() {
+	// Stop position updates
+	p.stopPositionUpdates()
+
 	// Stop the speaker from playing this stream
 	if p.ctrl != nil {
 		p.ctrl.Paused = true
@@ -83,6 +91,9 @@ func (p *Player) playInternal() error {
 	p.status.IsPlaying = true
 	p.status.IsPaused = false
 
+	// Start position updates
+	p.startPositionUpdates()
+
 	return nil
 }
 
@@ -109,6 +120,8 @@ func (p *Player) Play() error {
 		p.ctrl.Paused = false
 		p.status.IsPlaying = true
 		p.status.IsPaused = false
+		// Restart position updates
+		p.startPositionUpdates()
 	} else {
 		// Start fresh playback
 		return p.playInternal()
@@ -135,6 +148,9 @@ func (p *Player) Pause() error {
 	p.status.IsPlaying = false
 	p.status.IsPaused = true
 
+	// Stop position updates
+	p.stopPositionUpdates()
+
 	return nil
 }
 
@@ -157,6 +173,9 @@ func (p *Player) Stop() error {
 	p.status.IsPlaying = false
 	p.status.IsPaused = false
 	p.status.Position = "0:00"
+
+	// Stop position updates
+	p.stopPositionUpdates()
 
 	return nil
 }
@@ -295,10 +314,44 @@ func (p *Player) UpdatePosition() {
 	}
 }
 
+// startPositionUpdates starts periodic position updates
+func (p *Player) startPositionUpdates() {
+	p.stopPositionUpdates() // Stop any existing ticker
+
+	p.positionTicker = time.NewTicker(500 * time.Millisecond) // Update twice per second
+	go func() {
+		for {
+			select {
+			case <-p.positionTicker.C:
+				p.UpdatePosition()
+			case <-p.stopTicker:
+				return
+			}
+		}
+	}()
+}
+
+// stopPositionUpdates stops periodic position updates
+func (p *Player) stopPositionUpdates() {
+	if p.positionTicker != nil {
+		p.positionTicker.Stop()
+		p.positionTicker = nil
+
+		// Signal the ticker goroutine to stop
+		select {
+		case p.stopTicker <- true:
+		default:
+		}
+	}
+}
+
 // Close cleans up all audio resources
 func (p *Player) Close() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
+	// Stop position updates
+	p.stopPositionUpdates()
 
 	p.cleanup()
 	return nil
@@ -437,6 +490,9 @@ func (p *Player) setupVolumeControl() {
 		p.status.IsPaused = false
 		callback := p.onTrackComplete
 		p.mu.Unlock()
+
+		// Stop position updates when track ends
+		p.stopPositionUpdates()
 
 		// Call the completion callback if set (outside of lock to avoid deadlock)
 		if callback != nil {
