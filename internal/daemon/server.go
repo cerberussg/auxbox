@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/cerberussg/auxbox/internal/shared"
 )
@@ -22,12 +23,17 @@ type Server struct {
 
 // NewServer creates a new daemon server instance
 func NewServer() *Server {
-	return &Server{
+	server := &Server{
 		transport: shared.NewUnixSocketTransport(),
 		player:    NewPlayer(),
 		playlist:  NewPlaylist(),
 		isRunning: false,
 	}
+
+	// Set up the track completion callback
+	server.player.SetOnTrackComplete(server.onTrackComplete)
+
+	return server
 }
 
 // LoadTracks loads tracks into the server's playlist
@@ -408,11 +414,57 @@ func (s *Server) handleExitCommand() shared.Response {
 	go func() {
 		// Give time for response to be sent
 		// time.Sleep(100 * time.Millisecond)
+
+		// Properly stop the player first
+		if err := s.player.Close(); err != nil {
+			log.Printf("Error closing player: %v", err)
+		}
+
 		s.Stop()
 		os.Exit(0)
 	}()
 
 	return shared.NewSuccessResponse("Exiting daemon", nil)
+}
+
+// onTrackComplete handles auto-advancing to the next track when current track ends
+func (s *Server) onTrackComplete() {
+	log.Println("Track completed, scheduling auto-advance to next track")
+
+	// Run auto-advance in a separate goroutine to avoid deadlocks
+	go func() {
+		// Small delay to ensure the track completion callback has fully finished
+		time.Sleep(100 * time.Millisecond)
+
+		s.mu.Lock()
+		defer s.mu.Unlock()
+
+		log.Println("Executing auto-advance to next track")
+
+		// Try to advance to next track in playlist
+		if s.playlist.Next() {
+			// Successfully moved to next track
+			nextTrack := s.playlist.GetCurrentTrack()
+			if nextTrack != nil {
+				log.Printf("Auto-advancing to: %s", nextTrack.Filename)
+
+				// Load the next track into the player
+				s.player.SetCurrentTrack(nextTrack)
+
+				// Auto-start playing the next track
+				if err := s.player.Play(); err != nil {
+					log.Printf("Failed to auto-play next track: %v", err)
+				} else {
+					log.Printf("Now auto-playing: %s", nextTrack.Filename)
+				}
+			} else {
+				log.Println("Next track is nil, cannot advance")
+			}
+		} else {
+			// Reached end of playlist
+			log.Println("Reached end of playlist, playback complete")
+		}
+	}()
 }
 
 // Helper methods

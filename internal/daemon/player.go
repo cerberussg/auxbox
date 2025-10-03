@@ -30,6 +30,9 @@ type Player struct {
 	ctrl           *beep.Ctrl
 	file           io.ReadCloser
 	speakerInit    bool
+
+	// Callback for when track ends
+	onTrackComplete func()
 }
 
 // NewPlayer creates a new audio player instance
@@ -207,6 +210,13 @@ func (p *Player) GetStatus() PlayerStatus {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.status
+}
+
+// SetOnTrackComplete sets the callback function to be called when a track finishes
+func (p *Player) SetOnTrackComplete(callback func()) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.onTrackComplete = callback
 }
 
 // SetVolume sets the playback volume (0.0 to 1.0)
@@ -425,7 +435,13 @@ func (p *Player) setupVolumeControl() {
 		p.mu.Lock()
 		p.status.IsPlaying = false
 		p.status.IsPaused = false
+		callback := p.onTrackComplete
 		p.mu.Unlock()
+
+		// Call the completion callback if set (outside of lock to avoid deadlock)
+		if callback != nil {
+			callback()
+		}
 	})
 
 	// Create a sequence that plays the track then calls the callback
