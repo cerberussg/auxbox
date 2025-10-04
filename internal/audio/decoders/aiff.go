@@ -9,13 +9,28 @@ import (
 	"github.com/gopxl/beep/v2"
 )
 
+const (
+	// Buffer size for streaming AIFF data (in samples per channel)
+	// This determines how much data we keep in memory at once
+	aiffBufferSize = 4096 // ~93ms at 44.1kHz, uses ~32KB for stereo float64
+)
+
 // aiffStreamer implements beep.StreamSeekCloser for AIFF files
 type aiffStreamer struct {
-	decoder *aiff.Decoder
-	format  beep.Format
-	buffer  *audio.IntBuffer
-	pos     int
-	samples [][2]float64
+	decoder       *aiff.Decoder
+	format        beep.Format
+	reader        io.ReadSeeker
+
+	// Streaming buffers
+	rawBuffer     *audio.IntBuffer // Raw PCM data buffer for chunks
+	sampleBuffer  [][2]float64     // Converted samples ready for playback
+	bufferPos     int              // Current position in sampleBuffer
+	totalSamples  int              // Total samples in the file
+	currentSample int              // Current sample position in file
+
+	// Format info for conversion
+	sourceBitDepth int
+	maxValue       float64
 }
 
 // DecodeAIFF creates a beep-compatible streamer from an AIFF file
@@ -39,10 +54,6 @@ func DecodeAIFF(r io.ReadCloser) (beep.StreamSeekCloser, beep.Format, error) {
 		return nil, beep.Format{}, fmt.Errorf("could not get AIFF format")
 	}
 
-	// Debug: Log AIFF format info
-	fmt.Printf("AIFF Format - Sample Rate: %d, Channels: %d\n",
-		format.SampleRate, format.NumChannels)
-
 	// Convert to beep format
 	beepFormat := beep.Format{
 		SampleRate:  beep.SampleRate(format.SampleRate),
@@ -50,45 +61,15 @@ func DecodeAIFF(r io.ReadCloser) (beep.StreamSeekCloser, beep.Format, error) {
 		Precision:   4, // 32-bit samples
 	}
 
-	// Read the entire PCM buffer for now (could be optimized for streaming later)
-	pcmBuffer, err := decoder.FullPCMBuffer()
-	if err != nil {
-		return nil, beep.Format{}, fmt.Errorf("failed to read AIFF PCM data: %w", err)
-	}
+	// Calculate total samples in the file
+	totalSamples := int(decoder.NumSampleFrames)
 
-	streamer := &aiffStreamer{
-		decoder: decoder,
-		format:  beepFormat,
-		buffer:  pcmBuffer,
-		pos:     0,
-	}
-
-	fmt.Printf("PCM Buffer length: %d, Sample count will be: %d\n",
-		len(pcmBuffer.Data), len(pcmBuffer.Data)/format.NumChannels)
-
-	// Convert audio data to beep's float64 format
-	streamer.convertSamples()
-
-	return streamer, beepFormat, nil
-}
-
-func (s *aiffStreamer) convertSamples() {
-	if s.buffer == nil || s.buffer.Data == nil {
-		return
-	}
-
-	numSamples := len(s.buffer.Data) / s.format.NumChannels
-	s.samples = make([][2]float64, numSamples)
-
-	// Determine the bit depth from the buffer SourceBitDepth (bytes)
-	sourceBitDepth := s.buffer.SourceBitDepth
-	bitDepth := int(sourceBitDepth * 8) // Convert bytes to bits
+	// Setup bit depth and normalization values
+	sourceBitDepth := int(decoder.SampleBitDepth())
 	var maxValue float64
-
-	// Calculate the maximum value for normalization based on bit depth
-	switch bitDepth {
+	switch sourceBitDepth {
 	case 8:
-		maxValue = float64(1 << 7) // 128
+		maxValue = float64(1 << 7)  // 128
 	case 16:
 		maxValue = float64(1 << 15) // 32768
 	case 24:
@@ -98,50 +79,124 @@ func (s *aiffStreamer) convertSamples() {
 	case 64:
 		maxValue = float64(1 << 63) // For int64
 	default:
-		// Default to 16-bit if unknown
-		maxValue = float64(1 << 15)
-		fmt.Printf("Unknown bit depth %d (from %d bytes), defaulting to 16-bit normalization\n", bitDepth, sourceBitDepth)
+		maxValue = float64(1 << 15) // Default to 16-bit
 	}
 
-	fmt.Printf("Converting %d samples, source bytes: %d, bit depth: %d, max value: %f\n",
-		numSamples, sourceBitDepth, bitDepth, maxValue)
+	streamer := &aiffStreamer{
+		decoder:        decoder,
+		format:         beepFormat,
+		reader:         readSeeker,
+		sampleBuffer:   make([][2]float64, aiffBufferSize),
+		bufferPos:      0,
+		totalSamples:   totalSamples,
+		currentSample:  0,
+		sourceBitDepth: sourceBitDepth,
+		maxValue:       maxValue,
+	}
 
-	for i := 0; i < numSamples; i++ {
+	// Load initial buffer
+	if err := streamer.fillBuffer(); err != nil {
+		return nil, beep.Format{}, fmt.Errorf("failed to load initial AIFF buffer: %w", err)
+	}
+
+	return streamer, beepFormat, nil
+}
+
+// fillBuffer reads a chunk of audio data from the file and converts it to float64 samples
+func (s *aiffStreamer) fillBuffer() error {
+	if s.currentSample >= s.totalSamples {
+		return fmt.Errorf("end of file reached")
+	}
+
+	// Calculate how many samples to read (don't exceed file bounds)
+	samplesToRead := aiffBufferSize
+	if s.currentSample+samplesToRead > s.totalSamples {
+		samplesToRead = s.totalSamples - s.currentSample
+	}
+
+	// Create a buffer for this chunk
+	s.rawBuffer = &audio.IntBuffer{
+		Data:   make([]int, samplesToRead*s.format.NumChannels),
+		Format: s.decoder.Format(),
+	}
+
+	// Read PCM data for this chunk
+	n, err := s.decoder.PCMBuffer(s.rawBuffer)
+	if err != nil {
+		return fmt.Errorf("failed to read PCM chunk: %w", err)
+	}
+
+	if n == 0 {
+		return fmt.Errorf("no data read from decoder")
+	}
+
+	// Convert the raw samples to float64 format
+	actualSamples := n / s.format.NumChannels
+	if actualSamples > len(s.sampleBuffer) {
+		actualSamples = len(s.sampleBuffer)
+	}
+
+	for i := 0; i < actualSamples; i++ {
 		if s.format.NumChannels == 1 {
 			// Mono: duplicate to both channels
-			sample := float64(s.buffer.Data[i]) / maxValue
-			s.samples[i] = [2]float64{sample, sample}
+			sample := float64(s.rawBuffer.Data[i]) / s.maxValue
+			s.sampleBuffer[i] = [2]float64{sample, sample}
 		} else if s.format.NumChannels >= 2 {
 			// Stereo or more: take first two channels
-			left := float64(s.buffer.Data[i*s.format.NumChannels]) / maxValue
-			right := float64(s.buffer.Data[i*s.format.NumChannels+1]) / maxValue
-			s.samples[i] = [2]float64{left, right}
+			left := float64(s.rawBuffer.Data[i*s.format.NumChannels]) / s.maxValue
+			right := float64(s.rawBuffer.Data[i*s.format.NumChannels+1]) / s.maxValue
+			s.sampleBuffer[i] = [2]float64{left, right}
 		}
 	}
 
-	if len(s.samples) > 0 {
-		sampleCount := 5
-		if len(s.samples) < sampleCount {
-			sampleCount = len(s.samples)
-		}
-		fmt.Printf("Sample conversion complete. First few samples: %v\n", s.samples[:sampleCount])
-	}
+	// Reset buffer position and update file position
+	s.bufferPos = 0
+	s.currentSample += actualSamples
+
+	return nil
 }
 
 func (s *aiffStreamer) Stream(samples [][2]float64) (n int, ok bool) {
-	if s.pos >= len(s.samples) {
-		return 0, false
+	if s.currentSample >= s.totalSamples {
+		return 0, false // End of file
 	}
 
-	n = len(samples)
-	if s.pos+n > len(s.samples) {
-		n = len(s.samples) - s.pos
+	totalCopied := 0
+	requestedSamples := len(samples)
+
+	for totalCopied < requestedSamples && s.currentSample < s.totalSamples {
+		// Check if we need to refill the buffer
+		if s.bufferPos >= aiffBufferSize || (s.bufferPos > 0 && s.bufferPos >= s.totalSamples-s.currentSample+s.bufferPos) {
+			if err := s.fillBuffer(); err != nil {
+				// If we can't fill buffer but have copied some samples, return what we have
+				if totalCopied > 0 {
+					return totalCopied, true
+				}
+				return 0, false
+			}
+		}
+
+		// Calculate how many samples to copy from current buffer
+		remainingInRequest := requestedSamples - totalCopied
+		remainingInBuffer := aiffBufferSize - s.bufferPos
+		samplesRemaining := s.totalSamples - (s.currentSample - (aiffBufferSize - s.bufferPos))
+
+		toCopy := remainingInRequest
+		if toCopy > remainingInBuffer {
+			toCopy = remainingInBuffer
+		}
+		if toCopy > samplesRemaining {
+			toCopy = samplesRemaining
+		}
+
+		// Copy samples from buffer
+		copy(samples[totalCopied:totalCopied+toCopy], s.sampleBuffer[s.bufferPos:s.bufferPos+toCopy])
+
+		s.bufferPos += toCopy
+		totalCopied += toCopy
 	}
 
-	copy(samples[:n], s.samples[s.pos:s.pos+n])
-	s.pos += n
-
-	return n, true
+	return totalCopied, totalCopied > 0
 }
 
 func (s *aiffStreamer) Err() error {
@@ -149,22 +204,39 @@ func (s *aiffStreamer) Err() error {
 }
 
 func (s *aiffStreamer) Len() int {
-	return len(s.samples)
+	return s.totalSamples
 }
 
 func (s *aiffStreamer) Position() int {
-	return s.pos
+	// Return current position in the file (samples played so far)
+	return s.currentSample - (aiffBufferSize - s.bufferPos)
 }
 
 func (s *aiffStreamer) Seek(p int) error {
-	if p < 0 || p >= len(s.samples) {
-		return fmt.Errorf("seek position out of range")
+	if p < 0 || p >= s.totalSamples {
+		return fmt.Errorf("seek position out of range: %d (total: %d)", p, s.totalSamples)
 	}
-	s.pos = p
+
+	// Seek in the underlying reader
+	// Calculate byte position for seeking (this is approximate)
+	bytesPerSample := s.sourceBitDepth / 8
+	bytePos := int64(p * s.format.NumChannels * bytesPerSample)
+
+	if _, err := s.reader.Seek(bytePos, io.SeekStart); err != nil {
+		return fmt.Errorf("failed to seek in AIFF file: %w", err)
+	}
+
+	// Update our position tracking
+	s.currentSample = p
+	s.bufferPos = aiffBufferSize // Force buffer refill on next Stream call
+
 	return nil
 }
 
 func (s *aiffStreamer) Close() error {
+	// Clean up buffers to free memory
+	s.rawBuffer = nil
+	s.sampleBuffer = nil
 	// The decoder doesn't need explicit closing in go-audio/aiff
 	return nil
 }
