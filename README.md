@@ -1,11 +1,11 @@
 # auxbox
 
-A lightweight CLI music player for background listening with daemon-based architecture.
+A lightweight CLI music player for background listening with daemon architecture.
 
 ## Features
 
 ### Audio Format Support
-- **MP3** - MPEG-1 Audio Layer 3 files
+- **MP3** - MPEG 1 Audio Layer 3 files
 - **WAV** - Waveform Audio Files
 - **AIFF/AIF** - Audio Interchange File Format
 
@@ -14,7 +14,7 @@ A lightweight CLI music player for background listening with daemon-based archit
 - **Skip/Back** - Navigate tracks with optional count (e.g., `skip 3`)
 - **Volume Control** - Set volume from 0-100%
 - **Auto-advance** - Automatically plays next track when current track ends
-- **Position Tracking** - Real-time playback position updates
+- **Position Tracking** - Real time playback position updates
 
 ### Source Types
 - **Folder** - Load all supported audio files from a directory
@@ -134,7 +134,7 @@ auxbox play
 
 # Check what's playing
 auxbox status
-# Output: ¶ song.mp3 | 2:34/4:12 | Track 1/12 | Source: ~/Downloads/new-pack/
+# Output: ï¿½ song.mp3 | 2:34/4:12 | Track 1/12 | Source: ~/Downloads/new-pack/
 
 # Skip a few tracks
 auxbox skip 3
@@ -142,12 +142,12 @@ auxbox skip 3
 # Adjust volume
 auxbox volume 60
 
-# List all tracks (shows current with ¶ marker)
+# List all tracks (shows current with ï¿½ marker)
 auxbox list
 # Output: Tracks (12 total):
 #   1. first-song.mp3
 #   2. second-song.mp3
-# ¶ 4. current-song.mp3
+# ï¿½ 4. current-song.mp3
 #   5. next-song.mp3
 #   ...
 
@@ -170,13 +170,13 @@ auxbox --version  # Show version information
 - **Unix sockets** - IPC communication (Linux/macOS)
 
 ### Architecture
-- **Client-Server model** - CLI commands communicate with background daemon
+- **Client Server model** - CLI commands communicate with background daemon
 - **Modular design** - Separate packages for audio, playlist, server, and transport
-- **Thread-safe** - Concurrent-safe playback controls and status updates
+- **Thread safe** - Concurrent-safe playback controls and status updates
 
 ### Audio System
 - **Automatic format detection** - Based on file extension
-- **Real-time position tracking** - Updates during playback
+- **Real time position tracking** - Updates during playback
 - **Volume control with fading** - Smooth volume transitions
 - **Resource management** - Proper cleanup of audio streams and files
 
