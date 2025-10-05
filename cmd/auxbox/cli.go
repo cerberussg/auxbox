@@ -19,9 +19,11 @@ const (
 	usage   = `auxbox - CLI music player for background listening
 
 Usage:
-  auxbox start --folder <path>     Start daemon with folder source
-  auxbox start --playlist <path>   Start daemon with playlist source
-  auxbox play                      Start/resume playback
+  auxbox play -f <path>            Load folder and play instantly
+  auxbox play --folder <path>      Load folder and play instantly
+  auxbox play -p <path>            Load playlist and play instantly
+  auxbox play --playlist <path>    Load playlist and play instantly
+  auxbox play                      Resume playback (if paused)
   auxbox pause                     Pause playback
   auxbox stop                      Stop playback (reset to beginning)
   auxbox skip [n]                  Skip forward n tracks (default: 1)
@@ -34,11 +36,11 @@ Usage:
   auxbox --version, -v             Show version
 
 Examples:
-  auxbox start --folder ~/Downloads/new-pack/
+  auxbox play -f ~/Downloads/new-pack/     # Instant music from folder
+  auxbox play -p ~/playlists/workout.m3u  # Switch to playlist while playing
   auxbox skip 3
-  auxbox back
   auxbox volume 75
-  auxbox stop
+  auxbox pause
   auxbox exit`
 )
 
@@ -78,8 +80,6 @@ func (c *CLI) Run(args []string) {
 		sourceType := shared.SourceType(args[2])
 		sourcePath := args[3]
 		c.runDaemonProcess(sourceType, sourcePath)
-	case "start":
-		c.handleStartCommand(args)
 	case "play":
 		c.handlePlayCommand(args)
 	case "pause":
@@ -104,48 +104,6 @@ func (c *CLI) Run(args []string) {
 	}
 }
 
-func (c *CLI) handleStartCommand(args []string) {
-	if len(args) < 4 {
-		fmt.Println("Start command requires source type and path.")
-		fmt.Println("Usage: auxbox start --folder <path> | --playlist <path>")
-		os.Exit(1)
-	}
-
-	sourceFlag := args[2]
-	sourcePath := args[3]
-
-	var sourceType shared.SourceType
-	switch sourceFlag {
-	case "--folder", "-f":
-		sourceType = shared.SourceFolder
-	case "--playlist", "-p":
-		sourceType = shared.SourcePlaylist
-	default:
-		fmt.Printf("Unknown source type: %s\n", sourceFlag)
-		fmt.Println("Use --folder or --playlist")
-		os.Exit(1)
-	}
-
-	// Validate path exists
-	if !c.pathExists(sourcePath) {
-		fmt.Printf("Path does not exist: %s\n", sourcePath)
-		os.Exit(1)
-	}
-
-	// Check if daemon is already running
-	transport := shared.NewUnixSocketTransport()
-	if transport.IsRunning() {
-		fmt.Printf("auxbox daemon is already running.\n")
-		fmt.Printf("Use 'auxbox stop' to stop the current daemon first.\n")
-		os.Exit(1)
-	}
-
-	// Start daemon
-	fmt.Printf("Starting auxbox daemon with %s: %s\n", sourceType, sourcePath)
-
-	// Start the daemon in current process
-	c.startDaemon(sourceType, sourcePath)
-}
 
 func (c *CLI) handleSkipCommand(args []string) {
 	count := 1 // default
@@ -231,7 +189,7 @@ func (c *CLI) sendCommand(cmd shared.Command) {
 	transport := shared.NewUnixSocketTransport()
 	if !transport.IsRunning() {
 		fmt.Printf("auxbox daemon is not running.\n")
-		fmt.Printf("Start it with: auxbox start --folder <path>\n")
+		fmt.Printf("Start it with: auxbox play -f <path>\n")
 		os.Exit(1)
 	}
 
@@ -403,61 +361,6 @@ func (c *CLI) handleVolumeCommand(args []string) {
 	c.sendCommand(shared.NewVolumeCommand(volume))
 }
 
-// startDaemon starts the daemon server as a background process
-func (c *CLI) startDaemon(sourceType shared.SourceType, sourcePath string) {
-	// Check if we're being called as the daemon itself
-	if len(os.Args) >= 3 && os.Args[1] == "_daemon" {
-		c.runDaemonProcess(sourceType, sourcePath)
-		return
-	}
-
-	// Spawn daemon as background process
-	executable, err := os.Executable()
-	if err != nil {
-		fmt.Printf("Failed to get executable path: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Start daemon process with special flag
-	cmd := exec.Command(executable, "_daemon", string(sourceType), sourcePath)
-
-	// Redirect stdout/stderr to avoid output mixing
-	cmd.Stdout = nil
-	cmd.Stderr = nil
-
-	err = cmd.Start()
-	if err != nil {
-		fmt.Printf("Failed to start daemon: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Give daemon a moment to start
-	time.Sleep(100 * time.Millisecond)
-
-	// Verify daemon is running
-	transport := shared.NewUnixSocketTransport()
-	if !transport.IsRunning() {
-		fmt.Println("Failed to start daemon - not responding")
-		os.Exit(1)
-	}
-
-	// Send initial load command to daemon
-	startCmd := shared.NewStartCommand(sourceType, sourcePath)
-	resp, err := transport.Send(startCmd)
-	if err != nil {
-		fmt.Printf("Failed to initialize daemon: %v\n", err)
-		os.Exit(1)
-	}
-
-	if !resp.Success {
-		fmt.Printf("Failed to load source: %s\n", resp.Message)
-		os.Exit(1)
-	}
-
-	fmt.Printf("✓ %s\n", resp.Message)
-	fmt.Println("auxbox daemon started in background. Use 'auxbox play' to start playback.")
-}
-
 // startDaemonAndPlay starts the daemon and immediately begins playback
 func (c *CLI) startDaemonAndPlay(sourceType shared.SourceType, sourcePath string) {
 	// Check if we're being called as the daemon itself
@@ -496,35 +399,22 @@ func (c *CLI) startDaemonAndPlay(sourceType shared.SourceType, sourcePath string
 		os.Exit(1)
 	}
 
-	// Send initial load command to daemon
-	startCmd := shared.NewStartCommand(sourceType, sourcePath)
-	resp, err := transport.Send(startCmd)
+	// Send play command with source info to load and play immediately
+	playCmd := shared.NewPlayCommand()
+	playCmd.Source = sourceType
+	playCmd.Path = sourcePath
+	resp, err := transport.Send(playCmd)
 	if err != nil {
 		fmt.Printf("Failed to initialize daemon: %v\n", err)
 		os.Exit(1)
 	}
 
 	if !resp.Success {
-		fmt.Printf("Failed to load source: %s\n", resp.Message)
+		fmt.Printf("Failed to load source and start playback: %s\n", resp.Message)
 		os.Exit(1)
 	}
 
 	fmt.Printf("✓ %s\n", resp.Message)
-
-	// Immediately start playback
-	playCmd := shared.NewPlayCommand()
-	playResp, err := transport.Send(playCmd)
-	if err != nil {
-		fmt.Printf("Failed to start playback: %v\n", err)
-		os.Exit(1)
-	}
-
-	if !playResp.Success {
-		fmt.Printf("Failed to start playback: %s\n", playResp.Message)
-		os.Exit(1)
-	}
-
-	fmt.Println("✓ Playback started")
 }
 
 // runDaemonProcess runs the actual daemon server (called by background process)

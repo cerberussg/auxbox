@@ -108,8 +108,6 @@ func (s *Server) handleCommand(cmd shared.Command) shared.Response {
 	log.Printf("Received command: %s", cmd.Type)
 
 	switch cmd.Type {
-	case shared.CmdStart:
-		return s.handleStartCommand(cmd)
 	case shared.CmdPlay:
 		return s.handlePlayCommand(cmd)
 	case shared.CmdPause:
@@ -133,57 +131,6 @@ func (s *Server) handleCommand(cmd shared.Command) shared.Response {
 	}
 }
 
-func (s *Server) handleStartCommand(cmd shared.Command) shared.Response {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// Validate source path
-	if cmd.Path == "" {
-		return shared.NewErrorResponse("No path provided for start command")
-	}
-
-	// Expand path
-	expandedPath, err := s.loader.ExpandPath(cmd.Path)
-	if err != nil {
-		return shared.NewErrorResponse(fmt.Sprintf("Invalid path: %v", err))
-	}
-
-	// Check if path exists
-	if _, err := os.Stat(expandedPath); os.IsNotExist(err) {
-		return shared.NewErrorResponse(fmt.Sprintf("Path does not exist: %s", expandedPath))
-	}
-
-	// Load tracks based on source type
-	switch cmd.Source {
-	case shared.SourceFolder:
-		if err := s.LoadFolder(expandedPath); err != nil {
-			return shared.NewErrorResponse(fmt.Sprintf("Failed to load folder: %v", err))
-		}
-	case shared.SourcePlaylist:
-		if err := s.LoadPlaylist(expandedPath); err != nil {
-			return shared.NewErrorResponse(fmt.Sprintf("Failed to load playlist: %v", err))
-		}
-	default:
-		return shared.NewErrorResponse(fmt.Sprintf("Unsupported source type: %s", cmd.Source))
-	}
-
-	trackCount := s.playlist.TrackCount()
-	if trackCount == 0 {
-		return shared.NewErrorResponse("No audio files found in the specified location")
-	}
-
-	// Set the first track as current in the player
-	firstTrack := s.playlist.GetCurrentTrack()
-	if firstTrack != nil {
-		s.player.SetCurrentTrack(firstTrack)
-	}
-
-	log.Printf("Loaded %d tracks from %s: %s", trackCount, cmd.Source, expandedPath)
-	return shared.NewSuccessResponse(
-		fmt.Sprintf("Loaded %d tracks from %s", trackCount, cmd.Source),
-		nil,
-	)
-}
 
 func (s *Server) handlePlayCommand(cmd shared.Command) shared.Response {
 	// Check if source info is provided (play with source loading)
