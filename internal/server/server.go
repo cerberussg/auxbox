@@ -111,7 +111,7 @@ func (s *Server) handleCommand(cmd shared.Command) shared.Response {
 	case shared.CmdStart:
 		return s.handleStartCommand(cmd)
 	case shared.CmdPlay:
-		return s.playbackHandler.HandlePlay()
+		return s.handlePlayCommand(cmd)
 	case shared.CmdPause:
 		return s.playbackHandler.HandlePause()
 	case shared.CmdStop:
@@ -185,6 +185,69 @@ func (s *Server) handleStartCommand(cmd shared.Command) shared.Response {
 	)
 }
 
+func (s *Server) handlePlayCommand(cmd shared.Command) shared.Response {
+	// Check if source info is provided (play with source loading)
+	if cmd.Path != "" && cmd.Source != "" {
+		// Hot-swap source and play
+		return s.handlePlayWithSource(cmd)
+	}
+
+	// Regular play command - just start/resume playback
+	return s.playbackHandler.HandlePlay()
+}
+
+func (s *Server) handlePlayWithSource(cmd shared.Command) shared.Response {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Validate and expand path
+	expandedPath, err := s.loader.ExpandPath(cmd.Path)
+	if err != nil {
+		return shared.NewErrorResponse(fmt.Sprintf("Invalid path: %v", err))
+	}
+
+	// Check if path exists
+	if _, err := os.Stat(expandedPath); os.IsNotExist(err) {
+		return shared.NewErrorResponse(fmt.Sprintf("Path does not exist: %s", expandedPath))
+	}
+
+	// Load tracks based on source type
+	switch cmd.Source {
+	case shared.SourceFolder:
+		if err := s.LoadFolder(expandedPath); err != nil {
+			return shared.NewErrorResponse(fmt.Sprintf("Failed to load folder: %v", err))
+		}
+	case shared.SourcePlaylist:
+		if err := s.LoadPlaylist(expandedPath); err != nil {
+			return shared.NewErrorResponse(fmt.Sprintf("Failed to load playlist: %v", err))
+		}
+	default:
+		return shared.NewErrorResponse(fmt.Sprintf("Unsupported source type: %s", cmd.Source))
+	}
+
+	trackCount := s.playlist.TrackCount()
+	if trackCount == 0 {
+		return shared.NewErrorResponse("No audio files found in the specified location")
+	}
+
+	// Set the first track as current in the player
+	firstTrack := s.playlist.GetCurrentTrack()
+	if firstTrack != nil {
+		s.player.SetCurrentTrack(firstTrack)
+	}
+
+	// Start playback immediately
+	playResp := s.playbackHandler.HandlePlay()
+	if !playResp.Success {
+		return playResp
+	}
+
+	log.Printf("Loaded %d tracks from %s: %s and started playback", trackCount, cmd.Source, expandedPath)
+	return shared.NewSuccessResponse(
+		fmt.Sprintf("Loaded %d tracks from %s and started playback", trackCount, cmd.Source),
+		nil,
+	)
+}
 
 func (s *Server) handleExitCommand() shared.Response {
 	// Stop the daemon
