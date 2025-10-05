@@ -1,6 +1,6 @@
 # auxbox
 
-A lightweight CLI music player for background listening with daemon architecture.
+A lightweight CLI music player for background listening with daemon architecture. Perfect for casual listening and DJ track preparation.
 
 ## Features
 
@@ -9,16 +9,26 @@ A lightweight CLI music player for background listening with daemon architecture
 - **WAV** - Waveform Audio Files
 - **AIFF/AIF** - Audio Interchange File Format
 
+### Streamlined Playback
+- **Instant music** - One command from silence to sound: `auxbox play -f ~/music`
+- **Hot-swapping** - Switch music sources seamlessly while playing
+- **Auto-advance** - Automatically plays next track when current track ends
+- **Position tracking** - Real time playback position updates
+
 ### Playback Controls
 - **Play/Pause/Stop** - Full playback control
 - **Skip/Back** - Navigate tracks with optional count (e.g., `skip 3`)
-- **Volume Control** - Set volume from 0-100%
-- **Auto-advance** - Automatically plays next track when current track ends
-- **Position Tracking** - Real time playback position updates
+- **Volume control** - Set volume from 0-100%
 
 ### Source Types
 - **Folder** - Load all supported audio files from a directory
-- **Playlist** - Load tracks from playlist files (future expansion)
+- **Playlist** - Load tracks from playlist files (.m3u support)
+
+### DJ Workflow Integration
+- **Track rating** - Rate tracks 1-5 stars while listening
+- **Genre tagging** - Categorize tracks by musical style
+- **Label tracking** - Tag record labels for organization
+- **Rekordbox compatibility** - All metadata syncs with rekordbox
 
 ### Daemon Architecture
 - **Background operation** - Music continues playing after CLI commands
@@ -33,7 +43,7 @@ A lightweight CLI music player for background listening with daemon architecture
 # Clone and build
 git clone https://github.com/cerberussg/auxbox
 cd auxbox
-go build -o auxbox cmd/auxbox/main.go
+go build -o auxbox cmd/auxbox/*.go
 ```
 
 ### Add to PATH
@@ -78,22 +88,32 @@ move auxbox.exe C:\auxbox\
 
 ## Usage
 
-### Basic Commands
+### Instant Music Playback
 
-**Start the daemon with a music folder:**
+**Load and play music instantly:**
 ```bash
-auxbox start --folder ~/Music/Albums/new-album/
-auxbox start --folder /path/to/your/music/collection/
+auxbox play -f ~/Music/Albums/new-album/       # Load folder and play instantly
+auxbox play --folder ~/Music/collection/       # Same as above (long form)
+auxbox play -p ~/playlists/favorites.m3u       # Load playlist and play instantly
+auxbox play --playlist ~/playlists/rock.m3u    # Same as above (long form)
+```
+
+**Hot-swap sources while playing:**
+```bash
+auxbox play -f ~/different-folder/              # Switch to new folder instantly
+auxbox play -p ~/playlists/workout.m3u          # Switch to playlist while playing
 ```
 
 **Basic playback controls:**
 ```bash
-auxbox play      # Start/resume playback
+auxbox play      # Resume playback (if paused)
 auxbox pause     # Pause playback
 auxbox stop      # Stop and reset to beginning
 ```
 
-**Navigation:**
+### Navigation and Control
+
+**Track navigation:**
 ```bash
 auxbox skip      # Skip to next track
 auxbox skip 3    # Skip forward 3 tracks
@@ -123,18 +143,24 @@ auxbox exit      # Stop daemon and exit
 ### Example Workflow
 
 ```bash
-# Start daemon with your music folder
-auxbox start --folder ~/Downloads/new-pack/
+# Load music and start playing instantly - one command!
+auxbox play -f ~/Downloads/new-pack/
 
-# Output:  Loaded 12 tracks from folder
-# auxbox daemon started in background. Use 'auxbox play' to start playback.
-
-# Start playing
-auxbox play
+# Output: ✓ Loaded 12 tracks from folder and started playback
+# Music starts playing immediately!
 
 # Check what's playing
 auxbox status
-# Output: � song.mp3 | 2:34/4:12 | Track 1/12 | Source: ~/Downloads/new-pack/
+# Output: ▶ song.mp3 | 2:34/4:12 | Track 1/12 | Source: ~/Downloads/new-pack/
+
+# Switch to a different folder while playing
+auxbox play -f ~/Music/jazz-collection/
+# Output: ✓ Loaded 8 tracks from folder and started playback
+# Seamlessly switches to new music source
+
+# Switch to a playlist
+auxbox play -p ~/playlists/workout.m3u
+# Hot-swaps to playlist while playing
 
 # Skip a few tracks
 auxbox skip 3
@@ -142,18 +168,93 @@ auxbox skip 3
 # Adjust volume
 auxbox volume 60
 
-# List all tracks (shows current with � marker)
+# List all tracks (shows current with ▶ marker)
 auxbox list
-# Output: Tracks (12 total):
-#   1. first-song.mp3
-#   2. second-song.mp3
-# � 4. current-song.mp3
-#   5. next-song.mp3
+# Output: Tracks (8 total):
+#   1. first-jazz-song.mp3
+#   2. second-jazz-song.mp3
+# ▶ 4. current-jazz-song.mp3
+#   5. next-jazz-song.mp3
 #   ...
 
 # When done, exit the daemon
 auxbox exit
 ```
+
+## DJ Workflow Integration
+
+auxbox doubles as a powerful DJ preparation tool, allowing you to rate and tag tracks while listening - perfect for organizing your music library without opening heavyweight DJ software.
+
+### Track Rating System
+Rate tracks on the fly while listening to build your energy-level system:
+
+```bash
+# Preview new tracks and rate them
+auxbox play -f ~/new-tracks-pack/
+
+# While listening, rate tracks 1-5 stars
+auxbox stars 5          # Peak-hour banger
+auxbox stars 2          # Good opener/breakdown track
+auxbox stars 4          # High energy, main set material
+```
+
+### Genre Tagging
+Categorize tracks by style during preview sessions:
+
+```bash
+auxbox genre "Deep House"
+auxbox genre "Tech House"
+auxbox genre "Progressive Trance"
+```
+
+### Record Label Organization
+Track the source/label for discovery and organization:
+
+```bash
+auxbox label "Defected Records"
+auxbox label "Anjunadeep"
+auxbox label "Drumcode"
+```
+
+### Complete DJ Prep Workflow
+```bash
+# Load new promo pack for evaluation
+auxbox play -f ~/promos/december-2024/
+
+# Listen and rate each track
+auxbox stars 4
+auxbox genre "Deep House"
+auxbox label "Hot Creations"
+
+auxbox skip                # Next track
+auxbox stars 2             # Opener material
+auxbox genre "Minimal Tech"
+auxbox label "Percomaniacs"
+
+# Hot-swap to different style pack
+auxbox play -f ~/downloads/techno-pack/
+
+# Continue rating and tagging...
+auxbox stars 5
+auxbox genre "Peak Time Techno"
+auxbox label "Drumcode"
+```
+
+### Rekordbox Integration
+All metadata is written directly to your audio files using industry-standard ID3v2 tags:
+- **Stars** → POPM (Popularimeter) frame compatible with rekordbox star ratings
+- **Genre** → TCON (Content Type) field
+- **Label** → TPUB (Publisher) field
+
+When you open rekordbox later, all your ratings, genres, and labels are already there - no re-work needed!
+
+### Benefits for DJs
+- **Preview without rekordbox overhead** - Quick track evaluation
+- **Bulk rating sessions** - Rate entire packs in one session
+- **Energy-level organization** - 5 stars = peak hour, 2 stars = openers
+- **Style categorization** - Genre tagging for playlist creation
+- **Source tracking** - Know which labels produce your favorite tracks
+- **Seamless integration** - Works with your existing rekordbox workflow
 
 ### Help and Version
 
@@ -180,6 +281,38 @@ auxbox --version  # Show version information
 - **Volume control with fading** - Smooth volume transitions
 - **Resource management** - Proper cleanup of audio streams and files
 
+## Development Roadmap
+
+### Phase 1: Streamlined UX ✅
+- Unified play command with source loading
+- Hot-swapping music sources while playing
+- One-command-to-music workflow
+
+### Phase 2: Randomize Feature
+- Shuffle/randomize playback order
+- Toggle shuffle on/off during playback
+- Maintain original order option
+
+### Phase 3: Continuous Play
+- Auto-loop playlists and folders
+- Seamless track transitions
+- Repeat mode options
+
+### Phase 4: DJ Star Rating ⭐
+- 1-5 star rating system while listening
+- Rekordbox-compatible metadata writing
+- Energy-level track organization
+
+### Phase 5: Genre Tagging 🎵
+- Real-time genre classification
+- Style-based track organization
+- DJ workflow integration
+
+### Phase 6: Label Tracking 🏷️
+- Record label metadata tracking
+- Source discovery and organization
+- Complete DJ preparation workflow
+
 ## Development
 
 **Run tests:**
@@ -190,13 +323,13 @@ go test ./...
 **Build for different platforms:**
 ```bash
 # Linux
-GOOS=linux GOARCH=amd64 go build -o auxbox-linux cmd/auxbox/main.go
+GOOS=linux GOARCH=amd64 go build -o auxbox-linux cmd/auxbox/*.go
 
 # macOS
-GOOS=darwin GOARCH=amd64 go build -o auxbox-macos cmd/auxbox/main.go
+GOOS=darwin GOARCH=amd64 go build -o auxbox-macos cmd/auxbox/*.go
 
 # Windows
-GOOS=windows GOARCH=amd64 go build -o auxbox.exe cmd/auxbox/main.go
+GOOS=windows GOARCH=amd64 go build -o auxbox.exe cmd/auxbox/*.go
 ```
 
 ## License

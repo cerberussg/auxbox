@@ -19,9 +19,11 @@ const (
 	usage   = `auxbox - CLI music player for background listening
 
 Usage:
-  auxbox start --folder <path>     Start daemon with folder source
-  auxbox start --playlist <path>   Start daemon with playlist source
-  auxbox play                      Start/resume playback
+  auxbox play -f <path>            Load folder and play instantly
+  auxbox play --folder <path>      Load folder and play instantly
+  auxbox play -p <path>            Load playlist and play instantly
+  auxbox play --playlist <path>    Load playlist and play instantly
+  auxbox play                      Resume playback (if paused)
   auxbox pause                     Pause playback
   auxbox stop                      Stop playback (reset to beginning)
   auxbox skip [n]                  Skip forward n tracks (default: 1)
@@ -34,11 +36,11 @@ Usage:
   auxbox --version, -v             Show version
 
 Examples:
-  auxbox start --folder ~/Downloads/new-pack/
+  auxbox play -f ~/Downloads/new-pack/     # Instant music from folder
+  auxbox play -p ~/playlists/workout.m3u  # Switch to playlist while playing
   auxbox skip 3
-  auxbox back
   auxbox volume 75
-  auxbox stop
+  auxbox pause
   auxbox exit`
 )
 
@@ -78,10 +80,8 @@ func (c *CLI) Run(args []string) {
 		sourceType := shared.SourceType(args[2])
 		sourcePath := args[3]
 		c.runDaemonProcess(sourceType, sourcePath)
-	case "start":
-		c.handleStartCommand(args)
 	case "play":
-		c.sendCommand(shared.NewPlayCommand())
+		c.handlePlayCommand(args)
 	case "pause":
 		c.sendCommand(shared.NewPauseCommand())
 	case "skip":
@@ -104,48 +104,6 @@ func (c *CLI) Run(args []string) {
 	}
 }
 
-func (c *CLI) handleStartCommand(args []string) {
-	if len(args) < 4 {
-		fmt.Println("Start command requires source type and path.")
-		fmt.Println("Usage: auxbox start --folder <path> | --playlist <path>")
-		os.Exit(1)
-	}
-
-	sourceFlag := args[2]
-	sourcePath := args[3]
-
-	var sourceType shared.SourceType
-	switch sourceFlag {
-	case "--folder", "-f":
-		sourceType = shared.SourceFolder
-	case "--playlist", "-p":
-		sourceType = shared.SourcePlaylist
-	default:
-		fmt.Printf("Unknown source type: %s\n", sourceFlag)
-		fmt.Println("Use --folder or --playlist")
-		os.Exit(1)
-	}
-
-	// Validate path exists
-	if !c.pathExists(sourcePath) {
-		fmt.Printf("Path does not exist: %s\n", sourcePath)
-		os.Exit(1)
-	}
-
-	// Check if daemon is already running
-	transport := shared.NewUnixSocketTransport()
-	if transport.IsRunning() {
-		fmt.Printf("auxbox daemon is already running.\n")
-		fmt.Printf("Use 'auxbox stop' to stop the current daemon first.\n")
-		os.Exit(1)
-	}
-
-	// Start daemon
-	fmt.Printf("Starting auxbox daemon with %s: %s\n", sourceType, sourcePath)
-
-	// Start the daemon in current process
-	c.startDaemon(sourceType, sourcePath)
-}
 
 func (c *CLI) handleSkipCommand(args []string) {
 	count := 1 // default
@@ -175,12 +133,63 @@ func (c *CLI) handleBackCommand(args []string) {
 	c.sendCommand(shared.NewBackCommand(count))
 }
 
+func (c *CLI) handlePlayCommand(args []string) {
+	// If no additional args, just play/resume current playlist
+	if len(args) <= 2 {
+		c.sendCommand(shared.NewPlayCommand())
+		return
+	}
+
+	// Parse source flags
+	sourceFlag := args[2]
+	if len(args) < 4 {
+		fmt.Printf("Source flag %s requires a path.\n", sourceFlag)
+		fmt.Println("Usage: auxbox play -f <folder> | -p <playlist>")
+		os.Exit(1)
+	}
+
+	sourcePath := args[3]
+
+	var sourceType shared.SourceType
+	switch sourceFlag {
+	case "-f", "--folder":
+		sourceType = shared.SourceFolder
+	case "-p", "--playlist":
+		sourceType = shared.SourcePlaylist
+	default:
+		fmt.Printf("Unknown source flag: %s\n", sourceFlag)
+		fmt.Println("Use -f/--folder or -p/--playlist")
+		os.Exit(1)
+	}
+
+	// Validate path exists
+	if !c.pathExists(sourcePath) {
+		fmt.Printf("Path does not exist: %s\n", sourcePath)
+		os.Exit(1)
+	}
+
+	// Check if daemon is running
+	transport := shared.NewUnixSocketTransport()
+	if !transport.IsRunning() {
+		// Auto-start daemon with the provided source and begin playback
+		fmt.Printf("Starting auxbox daemon with %s: %s\n", sourceType, sourcePath)
+		c.startDaemonAndPlay(sourceType, sourcePath)
+		return
+	}
+
+	// Daemon is running - send hot-swap command
+	cmd := shared.NewPlayCommand()
+	cmd.Source = sourceType
+	cmd.Path = sourcePath
+	c.sendCommand(cmd)
+}
+
 func (c *CLI) sendCommand(cmd shared.Command) {
 	// Check if daemon is running
 	transport := shared.NewUnixSocketTransport()
 	if !transport.IsRunning() {
 		fmt.Printf("auxbox daemon is not running.\n")
-		fmt.Printf("Start it with: auxbox start --folder <path>\n")
+		fmt.Printf("Start it with: auxbox play -f <path>\n")
 		os.Exit(1)
 	}
 
@@ -352,8 +361,8 @@ func (c *CLI) handleVolumeCommand(args []string) {
 	c.sendCommand(shared.NewVolumeCommand(volume))
 }
 
-// startDaemon starts the daemon server as a background process
-func (c *CLI) startDaemon(sourceType shared.SourceType, sourcePath string) {
+// startDaemonAndPlay starts the daemon and immediately begins playback
+func (c *CLI) startDaemonAndPlay(sourceType shared.SourceType, sourcePath string) {
 	// Check if we're being called as the daemon itself
 	if len(os.Args) >= 3 && os.Args[1] == "_daemon" {
 		c.runDaemonProcess(sourceType, sourcePath)
@@ -390,21 +399,22 @@ func (c *CLI) startDaemon(sourceType shared.SourceType, sourcePath string) {
 		os.Exit(1)
 	}
 
-	// Send initial load command to daemon
-	startCmd := shared.NewStartCommand(sourceType, sourcePath)
-	resp, err := transport.Send(startCmd)
+	// Send play command with source info to load and play immediately
+	playCmd := shared.NewPlayCommand()
+	playCmd.Source = sourceType
+	playCmd.Path = sourcePath
+	resp, err := transport.Send(playCmd)
 	if err != nil {
 		fmt.Printf("Failed to initialize daemon: %v\n", err)
 		os.Exit(1)
 	}
 
 	if !resp.Success {
-		fmt.Printf("Failed to load source: %s\n", resp.Message)
+		fmt.Printf("Failed to load source and start playback: %s\n", resp.Message)
 		os.Exit(1)
 	}
 
 	fmt.Printf("✓ %s\n", resp.Message)
-	fmt.Println("auxbox daemon started in background. Use 'auxbox play' to start playback.")
 }
 
 // runDaemonProcess runs the actual daemon server (called by background process)

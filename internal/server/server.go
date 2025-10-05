@@ -108,10 +108,8 @@ func (s *Server) handleCommand(cmd shared.Command) shared.Response {
 	log.Printf("Received command: %s", cmd.Type)
 
 	switch cmd.Type {
-	case shared.CmdStart:
-		return s.handleStartCommand(cmd)
 	case shared.CmdPlay:
-		return s.playbackHandler.HandlePlay()
+		return s.handlePlayCommand(cmd)
 	case shared.CmdPause:
 		return s.playbackHandler.HandlePause()
 	case shared.CmdStop:
@@ -133,16 +131,23 @@ func (s *Server) handleCommand(cmd shared.Command) shared.Response {
 	}
 }
 
-func (s *Server) handleStartCommand(cmd shared.Command) shared.Response {
+
+func (s *Server) handlePlayCommand(cmd shared.Command) shared.Response {
+	// Check if source info is provided (play with source loading)
+	if cmd.Path != "" && cmd.Source != "" {
+		// Hot-swap source and play
+		return s.handlePlayWithSource(cmd)
+	}
+
+	// Regular play command - just start/resume playback
+	return s.playbackHandler.HandlePlay()
+}
+
+func (s *Server) handlePlayWithSource(cmd shared.Command) shared.Response {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Validate source path
-	if cmd.Path == "" {
-		return shared.NewErrorResponse("No path provided for start command")
-	}
-
-	// Expand path
+	// Validate and expand path
 	expandedPath, err := s.loader.ExpandPath(cmd.Path)
 	if err != nil {
 		return shared.NewErrorResponse(fmt.Sprintf("Invalid path: %v", err))
@@ -178,13 +183,18 @@ func (s *Server) handleStartCommand(cmd shared.Command) shared.Response {
 		s.player.SetCurrentTrack(firstTrack)
 	}
 
-	log.Printf("Loaded %d tracks from %s: %s", trackCount, cmd.Source, expandedPath)
+	// Start playback immediately
+	playResp := s.playbackHandler.HandlePlay()
+	if !playResp.Success {
+		return playResp
+	}
+
+	log.Printf("Loaded %d tracks from %s: %s and started playback", trackCount, cmd.Source, expandedPath)
 	return shared.NewSuccessResponse(
-		fmt.Sprintf("Loaded %d tracks from %s", trackCount, cmd.Source),
+		fmt.Sprintf("Loaded %d tracks from %s and started playback", trackCount, cmd.Source),
 		nil,
 	)
 }
-
 
 func (s *Server) handleExitCommand() shared.Response {
 	// Stop the daemon
