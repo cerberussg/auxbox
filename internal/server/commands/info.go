@@ -9,13 +9,11 @@ import (
 	"github.com/cerberussg/auxbox/internal/shared"
 )
 
-// InfoHandler handles status/list/volume commands
 type InfoHandler struct {
 	player   *audio.Player
 	playlist *playlist.Playlist
 }
 
-// NewInfoHandler creates a new info command handler
 func NewInfoHandler(player *audio.Player, playlist *playlist.Playlist) *InfoHandler {
 	return &InfoHandler{
 		player:   player,
@@ -23,7 +21,6 @@ func NewInfoHandler(player *audio.Player, playlist *playlist.Playlist) *InfoHand
 	}
 }
 
-// HandleStatus handles the status command
 func (h *InfoHandler) HandleStatus() shared.Response {
 	currentTrack := h.playlist.GetCurrentTrack()
 	if currentTrack == nil {
@@ -36,7 +33,7 @@ func (h *InfoHandler) HandleStatus() shared.Response {
 		Path:        currentTrack.Path,
 		Duration:    status.Duration,
 		Position:    status.Position,
-		TrackNumber: h.playlist.GetCurrentIndex() + 1, // 1-based indexing for display
+		TrackNumber: h.playlist.GetCurrentIndex() + 1,
 		TotalTracks: h.playlist.TrackCount(),
 		Source:      h.playlist.GetSource(),
 	}
@@ -44,14 +41,15 @@ func (h *InfoHandler) HandleStatus() shared.Response {
 	return shared.NewSuccessResponse("Current status", trackInfo)
 }
 
-// HandleList handles the list command
 func (h *InfoHandler) HandleList() shared.Response {
-	tracks := h.playlist.GetTrackList()
-	if len(tracks) == 0 {
+	// Use windowed approach to avoid loading all tracks
+	const windowSize = 15
+	tracks, startIdx, totalCount := h.playlist.GetTrackWindow(windowSize)
+
+	if totalCount == 0 {
 		return shared.NewSuccessResponse("No tracks loaded", nil)
 	}
 
-	// Convert tracks to string slice for JSON serialization
 	trackNames := make([]string, len(tracks))
 	for i, track := range tracks {
 		trackNames[i] = track.Filename
@@ -62,12 +60,13 @@ func (h *InfoHandler) HandleList() shared.Response {
 		SourceType: string(h.playlist.GetSourceType()),
 		Tracks:     trackNames,
 		CurrentIdx: h.playlist.GetCurrentIndex(),
+		StartIdx:   startIdx,
+		TotalCount: totalCount,
 	}
 
-	return shared.NewSuccessResponse(fmt.Sprintf("%d tracks loaded", len(tracks)), playlistInfo)
+	return shared.NewSuccessResponse(fmt.Sprintf("%d tracks loaded", totalCount), playlistInfo)
 }
 
-// HandleVolume handles the volume command
 func (h *InfoHandler) HandleVolume(cmd shared.Command) shared.Response {
 	// If volume is -1, return current volume
 	if cmd.Volume == -1 {
@@ -75,7 +74,7 @@ func (h *InfoHandler) HandleVolume(cmd shared.Command) shared.Response {
 		volumePercent := int(status.Volume * 100)
 
 		volumeData := map[string]interface{}{
-			"volume": status.Volume, // 0.0-1.0 for API compatibility
+			"volume": status.Volume,
 		}
 
 		return shared.NewSuccessResponse(
@@ -84,7 +83,6 @@ func (h *InfoHandler) HandleVolume(cmd shared.Command) shared.Response {
 		)
 	}
 
-	// Set volume (cmd.Volume is 0-100 percentage)
 	volumeFloat := float64(cmd.Volume) / 100.0
 
 	if err := h.player.SetVolume(volumeFloat); err != nil {

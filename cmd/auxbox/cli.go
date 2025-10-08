@@ -290,16 +290,31 @@ func (c *CLI) printListResponse(resp *shared.Response) {
 	}
 
 	if dataMap, ok := resp.Data.(map[string]interface{}); ok {
+		totalCount := c.getIntFromMap(dataMap, "total_count", 0)
+		startIdx := c.getIntFromMap(dataMap, "start_idx", 0)
+		currentIdx := c.getIntFromMap(dataMap, "current_idx", -1)
+
 		if tracksInterface, exists := dataMap["tracks"]; exists {
 			if tracks, ok := tracksInterface.([]interface{}); ok {
-				fmt.Printf("Tracks (%d total):\n", len(tracks))
+				// Show total count and window info if applicable
+				if totalCount > len(tracks) {
+					fmt.Printf("Tracks (%d total, showing %d-%d):\n",
+						totalCount,
+						startIdx+1,
+						startIdx+len(tracks))
+				} else {
+					fmt.Printf("Tracks (%d total):\n", totalCount)
+				}
+
+				// Print tracks with proper numbering
 				for i, trackInterface := range tracks {
 					if track, ok := trackInterface.(string); ok {
+						trackNum := startIdx + i // Actual track number (0-based)
 						marker := "  "
-						if currentIdx := c.getIntFromMap(dataMap, "current_idx", -1); currentIdx == i {
+						if currentIdx == trackNum {
 							marker = "▶ "
 						}
-						fmt.Printf("%s%d. %s\n", marker, i+1, track)
+						fmt.Printf("%s%d. %s\n", marker, trackNum+1, track)
 					}
 				}
 			}

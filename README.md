@@ -132,7 +132,7 @@ auxbox shuffle   # Toggle shuffle off (sequential playback)
 **Information:**
 ```bash
 auxbox status    # Show current track info with position/duration
-auxbox list      # Show all tracks in current queue
+auxbox list      # Show tracks (windowed view: 15 tracks around current position)
 ```
 
 **Volume control:**
@@ -186,14 +186,23 @@ auxbox shuffle
 # Adjust volume
 auxbox volume 60
 
-# List all tracks (shows current with ▶ marker)
+# View tracks around current position (windowed for large playlists)
 auxbox list
-# Output: Tracks (8 total):
+# Output for small playlist (≤15 tracks):
+# Tracks (8 total):
 #   1. first-jazz-song.mp3
 #   2. second-jazz-song.mp3
 # ▶ 4. current-jazz-song.mp3
 #   5. next-jazz-song.mp3
 #   ...
+#
+# Output for large playlist (shows 15-track window):
+# Tracks (5763 total, showing 2429-2443):
+#   2429. track-2428.mp3
+#   ...
+# ▶ 2436. current-track.mp3
+#   ...
+#   2443. track-2442.mp3
 
 # When done, exit the daemon
 auxbox exit
