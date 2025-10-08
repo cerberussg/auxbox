@@ -122,6 +122,65 @@ func (p *Playlist) GetTrackList() []*shared.Track {
 	return tracks
 }
 
+// GetTrackWindow returns a windowed slice of tracks around the current track
+// Returns (tracks, startIdx, totalCount)
+func (p *Playlist) GetTrackWindow(windowSize int) ([]*shared.Track, int, int) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	totalTracks := len(p.tracks)
+	if totalTracks == 0 {
+		return []*shared.Track{}, 0, 0
+	}
+
+	// If playlist is small, return everything
+	if totalTracks <= windowSize {
+		tracks := make([]*shared.Track, totalTracks)
+		for i, track := range p.tracks {
+			tracks[i] = &shared.Track{
+				Filename: track.Filename,
+				Path:     track.Path,
+				Duration: track.Duration,
+			}
+		}
+		return tracks, 0, totalTracks
+	}
+
+	// Calculate window bounds
+	contextSize := (windowSize - 1) / 2 // 7 tracks on each side for windowSize=15
+	startIdx := p.currentIdx - contextSize
+	endIdx := p.currentIdx + contextSize
+
+	// Adjust if near start
+	if startIdx < 0 {
+		endIdx += -startIdx
+		startIdx = 0
+	}
+
+	// Adjust if near end
+	if endIdx >= totalTracks {
+		startIdx -= (endIdx - totalTracks + 1)
+		endIdx = totalTracks - 1
+	}
+
+	// Final bounds check
+	if startIdx < 0 {
+		startIdx = 0
+	}
+
+	// Extract windowed tracks
+	windowTracks := make([]*shared.Track, endIdx-startIdx+1)
+	for i := startIdx; i <= endIdx; i++ {
+		windowTracks[i-startIdx] = &shared.Track{
+			Filename: p.tracks[i].Filename,
+			Path:     p.tracks[i].Path,
+			Duration: p.tracks[i].Duration,
+		}
+	}
+
+	return windowTracks, startIdx, totalTracks
+}
+
 func (p *Playlist) GetSource() string {
 	p.mu.RLock()
 	defer p.mu.RUnlock()

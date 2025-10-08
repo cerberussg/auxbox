@@ -55,6 +55,10 @@ func (u *UnixSocketTransport) Send(cmd Command) (*Response, error) {
 	}
 
 	scanner := bufio.NewScanner(conn)
+	// Increase buffer size for responses with long filenames (default is 64KB, set to 512KB)
+	buf := make([]byte, 0, 64*1024)
+	scanner.Buffer(buf, 512*1024)
+
 	if !scanner.Scan() {
 		return nil, fmt.Errorf("failed to read response: %w", scanner.Err())
 	}
