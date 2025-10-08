@@ -21,6 +21,7 @@ const (
 Usage:
   auxbox play -f <path>            Load folder and play instantly
   auxbox play --folder <path>      Load folder and play instantly
+  auxbox play -f <path> -s         Load folder, shuffle, and play
   auxbox play -p <path>            Load playlist and play instantly
   auxbox play --playlist <path>    Load playlist and play instantly
   auxbox play                      Resume playback (if paused)
@@ -28,6 +29,7 @@ Usage:
   auxbox stop                      Stop playback (reset to beginning)
   auxbox skip [n]                  Skip forward n tracks (default: 1)
   auxbox back [n]                  Skip backward n tracks (default: 1)
+  auxbox shuffle                   Toggle shuffle on/off
   auxbox volume [0-100]            Show or set volume percentage
   auxbox status                    Show current track info
   auxbox list                      List tracks in current queue
@@ -37,7 +39,9 @@ Usage:
 
 Examples:
   auxbox play -f ~/Downloads/new-pack/     # Instant music from folder
+  auxbox play -f ~/jazz -s                 # Load folder, shuffle, and play
   auxbox play -p ~/playlists/workout.m3u  # Switch to playlist while playing
+  auxbox shuffle                           # Toggle shuffle on current playlist
   auxbox skip 3
   auxbox volume 75
   auxbox pause
@@ -88,6 +92,8 @@ func (c *CLI) Run(args []string) {
 		c.handleSkipCommand(args)
 	case "back":
 		c.handleBackCommand(args)
+	case "shuffle":
+		c.sendCommand(shared.Command{Type: shared.CmdShuffle})
 	case "status":
 		c.sendCommand(shared.NewStatusCommand())
 	case "list":
@@ -144,7 +150,7 @@ func (c *CLI) handlePlayCommand(args []string) {
 	sourceFlag := args[2]
 	if len(args) < 4 {
 		fmt.Printf("Source flag %s requires a path.\n", sourceFlag)
-		fmt.Println("Usage: auxbox play -f <folder> | -p <playlist>")
+		fmt.Println("Usage: auxbox play -f <folder> | -p <playlist> [-s]")
 		os.Exit(1)
 	}
 
@@ -162,6 +168,17 @@ func (c *CLI) handlePlayCommand(args []string) {
 		os.Exit(1)
 	}
 
+	// Check for shuffle flag
+	shuffle := false
+	if len(args) >= 5 {
+		for i := 4; i < len(args); i++ {
+			if args[i] == "-s" || args[i] == "--shuffle" {
+				shuffle = true
+				break
+			}
+		}
+	}
+
 	// Validate path exists
 	if !c.pathExists(sourcePath) {
 		fmt.Printf("Path does not exist: %s\n", sourcePath)
@@ -173,7 +190,7 @@ func (c *CLI) handlePlayCommand(args []string) {
 	if !transport.IsRunning() {
 		// Auto-start daemon with the provided source and begin playback
 		fmt.Printf("Starting auxbox daemon with %s: %s\n", sourceType, sourcePath)
-		c.startDaemonAndPlay(sourceType, sourcePath)
+		c.startDaemonAndPlay(sourceType, sourcePath, shuffle)
 		return
 	}
 
@@ -181,6 +198,7 @@ func (c *CLI) handlePlayCommand(args []string) {
 	cmd := shared.NewPlayCommand()
 	cmd.Source = sourceType
 	cmd.Path = sourcePath
+	cmd.Shuffle = shuffle
 	c.sendCommand(cmd)
 }
 
@@ -362,7 +380,7 @@ func (c *CLI) handleVolumeCommand(args []string) {
 }
 
 // startDaemonAndPlay starts the daemon and immediately begins playback
-func (c *CLI) startDaemonAndPlay(sourceType shared.SourceType, sourcePath string) {
+func (c *CLI) startDaemonAndPlay(sourceType shared.SourceType, sourcePath string, shuffle bool) {
 	// Check if we're being called as the daemon itself
 	if len(os.Args) >= 3 && os.Args[1] == "_daemon" {
 		c.runDaemonProcess(sourceType, sourcePath)
@@ -403,6 +421,7 @@ func (c *CLI) startDaemonAndPlay(sourceType shared.SourceType, sourcePath string
 	playCmd := shared.NewPlayCommand()
 	playCmd.Source = sourceType
 	playCmd.Path = sourcePath
+	playCmd.Shuffle = shuffle
 	resp, err := transport.Send(playCmd)
 	if err != nil {
 		fmt.Printf("Failed to initialize daemon: %v\n", err)

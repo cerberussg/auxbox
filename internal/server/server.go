@@ -13,7 +13,6 @@ import (
 	"github.com/cerberussg/auxbox/internal/shared"
 )
 
-// Server represents the auxbox daemon server
 type Server struct {
 	transport shared.Transport
 	player    *audio.Player
@@ -21,14 +20,12 @@ type Server struct {
 	isRunning bool
 	mu        sync.RWMutex
 
-	// Command handlers
 	playbackHandler   *commands.PlaybackHandler
 	navigationHandler *commands.NavigationHandler
 	infoHandler       *commands.InfoHandler
-	loader           *Loader
+	loader            *Loader
 }
 
-// NewServer creates a new daemon server instance
 func NewServer() *Server {
 	player := audio.NewPlayer()
 	playlistObj := playlist.NewPlaylist()
@@ -39,25 +36,21 @@ func NewServer() *Server {
 		playlist:  playlistObj,
 		isRunning: false,
 
-		// Initialize command handlers
 		playbackHandler:   commands.NewPlaybackHandler(player, playlistObj),
 		navigationHandler: commands.NewNavigationHandler(player, playlistObj),
 		infoHandler:       commands.NewInfoHandler(player, playlistObj),
-		loader:           NewLoader(),
+		loader:            NewLoader(),
 	}
 
-	// Set up the track completion callback
 	player.SetOnTrackComplete(server.onTrackComplete)
 
 	return server
 }
 
-// LoadTracks loads tracks into the server's playlist
 func (s *Server) LoadTracks(tracks []*shared.Track, source string, sourceType shared.SourceType) error {
 	return s.playlist.LoadTracks(tracks, source, sourceType)
 }
 
-// Start starts the daemon server
 func (s *Server) Start() error {
 	s.mu.Lock()
 	if s.isRunning {
@@ -69,11 +62,9 @@ func (s *Server) Start() error {
 
 	log.Println("Starting auxbox daemon...")
 
-	// Start listening for commands
 	return s.transport.Listen(s.handleCommand)
 }
 
-// Stop stops the daemon server
 func (s *Server) Stop() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -84,12 +75,10 @@ func (s *Server) Stop() error {
 
 	log.Println("Stopping auxbox daemon...")
 
-	// Stop the player
 	if err := s.player.Stop(); err != nil {
 		log.Printf("Error stopping player: %v", err)
 	}
 
-	// Close transport
 	if err := s.transport.Close(); err != nil {
 		log.Printf("Error closing transport: %v", err)
 	}
@@ -98,12 +87,10 @@ func (s *Server) Stop() error {
 	return nil
 }
 
-// HandleCommand processes a command directly (used for initialization)
 func (s *Server) HandleCommand(cmd shared.Command) shared.Response {
 	return s.handleCommand(cmd)
 }
 
-// handleCommand processes incoming commands from clients
 func (s *Server) handleCommand(cmd shared.Command) shared.Response {
 	log.Printf("Received command: %s", cmd.Type)
 
@@ -118,6 +105,8 @@ func (s *Server) handleCommand(cmd shared.Command) shared.Response {
 		return s.navigationHandler.HandleSkip(cmd)
 	case shared.CmdBack:
 		return s.navigationHandler.HandleBack(cmd)
+	case shared.CmdShuffle:
+		return s.handleShuffleCommand()
 	case shared.CmdStatus:
 		return s.infoHandler.HandleStatus()
 	case shared.CmdList:
@@ -131,15 +120,11 @@ func (s *Server) handleCommand(cmd shared.Command) shared.Response {
 	}
 }
 
-
 func (s *Server) handlePlayCommand(cmd shared.Command) shared.Response {
-	// Check if source info is provided (play with source loading)
 	if cmd.Path != "" && cmd.Source != "" {
-		// Hot-swap source and play
 		return s.handlePlayWithSource(cmd)
 	}
 
-	// Regular play command - just start/resume playback
 	return s.playbackHandler.HandlePlay()
 }
 
@@ -147,18 +132,15 @@ func (s *Server) handlePlayWithSource(cmd shared.Command) shared.Response {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Validate and expand path
 	expandedPath, err := s.loader.ExpandPath(cmd.Path)
 	if err != nil {
 		return shared.NewErrorResponse(fmt.Sprintf("Invalid path: %v", err))
 	}
 
-	// Check if path exists
 	if _, err := os.Stat(expandedPath); os.IsNotExist(err) {
 		return shared.NewErrorResponse(fmt.Sprintf("Path does not exist: %s", expandedPath))
 	}
 
-	// Load tracks based on source type
 	switch cmd.Source {
 	case shared.SourceFolder:
 		if err := s.LoadFolder(expandedPath); err != nil {
@@ -177,32 +159,52 @@ func (s *Server) handlePlayWithSource(cmd shared.Command) shared.Response {
 		return shared.NewErrorResponse("No audio files found in the specified location")
 	}
 
-	// Set the first track as current in the player
+	if cmd.Shuffle {
+		s.playlist.Shuffle()
+		log.Println("Applied shuffle to loaded playlist")
+	}
+
 	firstTrack := s.playlist.GetCurrentTrack()
 	if firstTrack != nil {
 		s.player.SetCurrentTrack(firstTrack)
 	}
 
-	// Start playback immediately
 	playResp := s.playbackHandler.HandlePlay()
 	if !playResp.Success {
 		return playResp
 	}
 
-	log.Printf("Loaded %d tracks from %s: %s and started playback", trackCount, cmd.Source, expandedPath)
+	shuffleMsg := ""
+	if cmd.Shuffle {
+		shuffleMsg = " (shuffled)"
+	}
+
+	log.Printf("Loaded %d tracks from %s: %s%s and started playback", trackCount, cmd.Source, expandedPath, shuffleMsg)
 	return shared.NewSuccessResponse(
-		fmt.Sprintf("Loaded %d tracks from %s and started playback", trackCount, cmd.Source),
+		fmt.Sprintf("Loaded %d tracks from %s%s and started playback", trackCount, cmd.Source, shuffleMsg),
 		nil,
 	)
 }
 
-func (s *Server) handleExitCommand() shared.Response {
-	// Stop the daemon
-	go func() {
-		// Give time for response to be sent
-		// time.Sleep(100 * time.Millisecond)
+func (s *Server) handleShuffleCommand() shared.Response {
+	trackCount := s.playlist.TrackCount()
+	if trackCount == 0 {
+		return shared.NewErrorResponse("No tracks loaded")
+	}
 
-		// Properly stop the player first
+	nowShuffled := s.playlist.ToggleShuffle()
+
+	if nowShuffled {
+		log.Println("Playlist shuffled")
+		return shared.NewSuccessResponse("Playlist shuffled", nil)
+	} else {
+		log.Println("Shuffle disabled, restored original order")
+		return shared.NewSuccessResponse("Shuffle disabled, restored original order", nil)
+	}
+}
+
+func (s *Server) handleExitCommand() shared.Response {
+	go func() {
 		if err := s.player.Close(); err != nil {
 			log.Printf("Error closing player: %v", err)
 		}
@@ -214,11 +216,9 @@ func (s *Server) handleExitCommand() shared.Response {
 	return shared.NewSuccessResponse("Exiting daemon", nil)
 }
 
-// onTrackComplete handles auto-advancing to the next track when current track ends
 func (s *Server) onTrackComplete() {
 	log.Println("Track completed, scheduling auto-advance to next track")
 
-	// Run auto-advance in a separate goroutine to avoid deadlocks
 	go func() {
 		// Small delay to ensure the track completion callback has fully finished
 		time.Sleep(100 * time.Millisecond)
@@ -228,17 +228,13 @@ func (s *Server) onTrackComplete() {
 
 		log.Println("Executing auto-advance to next track")
 
-		// Try to advance to next track in playlist
 		if s.playlist.Next() {
-			// Successfully moved to next track
 			nextTrack := s.playlist.GetCurrentTrack()
 			if nextTrack != nil {
 				log.Printf("Auto-advancing to: %s", nextTrack.Filename)
 
-				// Load the next track into the player
 				s.player.SetCurrentTrack(nextTrack)
 
-				// Auto-start playing the next track
 				if err := s.player.Play(); err != nil {
 					log.Printf("Failed to auto-play next track: %v", err)
 				} else {
@@ -248,7 +244,6 @@ func (s *Server) onTrackComplete() {
 				log.Println("Next track is nil, cannot advance")
 			}
 		} else {
-			// Reached end of playlist
 			log.Println("Reached end of playlist, playback complete")
 		}
 	}()
@@ -256,8 +251,6 @@ func (s *Server) onTrackComplete() {
 
 // Helper methods
 
-
-// LoadFolder loads tracks from a folder using the loader
 func (s *Server) LoadFolder(folderPath string) error {
 	tracks, err := s.loader.LoadFolder(folderPath)
 	if err != nil {
@@ -274,7 +267,6 @@ func (s *Server) LoadFolder(folderPath string) error {
 	return nil
 }
 
-// LoadPlaylist loads tracks from a playlist file using the loader
 func (s *Server) LoadPlaylist(playlistPath string) error {
 	tracks, err := s.loader.LoadPlaylist(playlistPath)
 	if err != nil {
