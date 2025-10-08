@@ -18,6 +18,7 @@ A lightweight CLI music player for background listening with daemon architecture
 ### Playback Controls
 - **Play/Pause/Stop** - Full playback control
 - **Skip/Back** - Navigate tracks with optional count (e.g., `skip 3`)
+- **Shuffle mode** - Random track selection with toggle support
 - **Volume control** - Set volume from 0-100%
 
 ### Source Types
@@ -94,6 +95,7 @@ move auxbox.exe C:\auxbox\
 ```bash
 auxbox play -f ~/Music/Albums/new-album/       # Load folder and play instantly
 auxbox play --folder ~/Music/collection/       # Same as above (long form)
+auxbox play -f ~/Music/jazz -s                 # Load folder, enable shuffle, and play
 auxbox play -p ~/playlists/favorites.m3u       # Load playlist and play instantly
 auxbox play --playlist ~/playlists/rock.m3u    # Same as above (long form)
 ```
@@ -115,10 +117,16 @@ auxbox stop      # Stop and reset to beginning
 
 **Track navigation:**
 ```bash
-auxbox skip      # Skip to next track
+auxbox skip      # Skip to next track (or random if shuffle is on)
 auxbox skip 3    # Skip forward 3 tracks
-auxbox back      # Go back one track
+auxbox back      # Go back one track (or random if shuffle is on)
 auxbox back 2    # Go back 2 tracks
+```
+
+**Shuffle mode:**
+```bash
+auxbox shuffle   # Toggle shuffle on (random track selection)
+auxbox shuffle   # Toggle shuffle off (sequential playback)
 ```
 
 **Information:**
@@ -153,17 +161,27 @@ auxbox play -f ~/Downloads/new-pack/
 auxbox status
 # Output: ▶ song.mp3 | 2:34/4:12 | Track 1/12 | Source: ~/Downloads/new-pack/
 
+# Enable shuffle mode for random playback
+auxbox shuffle
+# Output: Playlist shuffled
+
+# Skip to a random track
+auxbox skip
+# Picks a random track from the playlist
+
 # Switch to a different folder while playing
 auxbox play -f ~/Music/jazz-collection/
 # Output: ✓ Loaded 8 tracks from folder and started playback
 # Seamlessly switches to new music source
 
-# Switch to a playlist
-auxbox play -p ~/playlists/workout.m3u
-# Hot-swaps to playlist while playing
+# Load and shuffle in one command
+auxbox play -f ~/Music/5300-track-library/ -s
+# Output: ✓ Loaded 5300 tracks from folder (shuffled) and started playback
+# Each track completion picks a random next track
 
-# Skip a few tracks
-auxbox skip 3
+# Toggle shuffle off for sequential playback
+auxbox shuffle
+# Output: Shuffle disabled, restored original order
 
 # Adjust volume
 auxbox volume 60
@@ -288,10 +306,11 @@ auxbox --version  # Show version information
 - Hot-swapping music sources while playing
 - One-command-to-music workflow
 
-### Phase 2: Randomize Feature
-- Shuffle/randomize playback order
+### Phase 2: Shuffle Feature ✅
+- Random track selection mode
 - Toggle shuffle on/off during playback
-- Maintain original order option
+- `-s` flag for instant shuffle on load
+- Works with skip/back commands
 
 ### Phase 3: Continuous Play
 - Auto-loop playlists and folders
