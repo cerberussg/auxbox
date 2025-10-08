@@ -1,21 +1,22 @@
 package playlist
 
 import (
+	"math/rand"
 	"sync"
+	"time"
 
 	"github.com/cerberussg/auxbox/internal/shared"
 )
 
-// Playlist manages a collection of tracks and current playback position
 type Playlist struct {
 	tracks     []*shared.Track
 	currentIdx int
-	source     string // Path to source folder/playlist
+	source     string
 	sourceType shared.SourceType
+	isShuffled bool
 	mu         sync.RWMutex
 }
 
-// NewPlaylist creates a new empty playlist
 func NewPlaylist() *Playlist {
 	return &Playlist{
 		tracks:     make([]*shared.Track, 0),
@@ -23,7 +24,6 @@ func NewPlaylist() *Playlist {
 	}
 }
 
-// LoadTracks loads a collection of tracks into the playlist
 func (p *Playlist) LoadTracks(tracks []*shared.Track, source string, sourceType shared.SourceType) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -32,11 +32,11 @@ func (p *Playlist) LoadTracks(tracks []*shared.Track, source string, sourceType 
 	p.source = source
 	p.sourceType = sourceType
 	p.currentIdx = 0
+	p.isShuffled = false
 
 	return nil
 }
 
-// GetCurrentTrack returns the currently selected track
 func (p *Playlist) GetCurrentTrack() *shared.Track {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
@@ -55,14 +55,18 @@ func (p *Playlist) GetCurrentIndex() int {
 	return p.currentIdx
 }
 
-// Next moves to the next track in the playlist
-// Returns true if successful, false if already at the end
 func (p *Playlist) Next() bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	if len(p.tracks) == 0 {
 		return false
+	}
+
+	if p.isShuffled {
+		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+		p.currentIdx = rng.Intn(len(p.tracks))
+		return true
 	}
 
 	if p.currentIdx < len(p.tracks)-1 {
@@ -73,14 +77,18 @@ func (p *Playlist) Next() bool {
 	return false // Already at the end
 }
 
-// Previous moves to the previous track in the playlist
-// Returns true if successful, false if already at the beginning
 func (p *Playlist) Previous() bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	if len(p.tracks) == 0 {
 		return false
+	}
+
+	if p.isShuffled {
+		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+		p.currentIdx = rng.Intn(len(p.tracks))
+		return true
 	}
 
 	if p.currentIdx > 0 {
@@ -91,14 +99,12 @@ func (p *Playlist) Previous() bool {
 	return false // Already at the beginning
 }
 
-// TrackCount returns the total number of tracks in the playlist
 func (p *Playlist) TrackCount() int {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return len(p.tracks)
 }
 
-// GetTrackList returns a copy of all tracks in the playlist
 func (p *Playlist) GetTrackList() []*shared.Track {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
@@ -106,7 +112,6 @@ func (p *Playlist) GetTrackList() []*shared.Track {
 	// Return a deep copy to prevent external modification
 	tracks := make([]*shared.Track, len(p.tracks))
 	for i, track := range p.tracks {
-		// Create a copy of each track
 		trackCopy := &shared.Track{
 			Filename: track.Filename,
 			Path:     track.Path,
@@ -117,14 +122,12 @@ func (p *Playlist) GetTrackList() []*shared.Track {
 	return tracks
 }
 
-// GetSource returns the source path (folder or playlist file)
 func (p *Playlist) GetSource() string {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.source
 }
 
-// GetSourceType returns the source type (folder, playlist, etc.)
 func (p *Playlist) GetSourceType() shared.SourceType {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
@@ -145,21 +148,32 @@ func (p *Playlist) SetCurrentIndex(idx int) bool {
 	return true
 }
 
-// Shuffle randomizes the order of tracks in the playlist
-// The current track remains the current track, but its index may change
 func (p *Playlist) Shuffle() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-
-	if len(p.tracks) <= 1 {
-		return
-	}
-
-	// TODO: Implement shuffle algorithm
-	// For now, just leave as-is
+	p.isShuffled = true
 }
 
-// Clear removes all tracks from the playlist
+func (p *Playlist) Unshuffle() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.isShuffled = false
+}
+
+func (p *Playlist) ToggleShuffle() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	p.isShuffled = !p.isShuffled
+	return p.isShuffled
+}
+
+func (p *Playlist) IsShuffled() bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.isShuffled
+}
+
 func (p *Playlist) Clear() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -168,4 +182,5 @@ func (p *Playlist) Clear() {
 	p.currentIdx = 0
 	p.source = ""
 	p.sourceType = ""
+	p.isShuffled = false
 }

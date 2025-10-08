@@ -1,37 +1,33 @@
 package shared
 
-// CommandType represents the type of command being sent
 type CommandType string
 
 const (
-	// Daemon management
 	CmdStart CommandType = "start"
 	CmdExit  CommandType = "exit"
 
-	// Playback control
-	CmdPlay   CommandType = "play"
-	CmdPause  CommandType = "pause"
-	CmdStop   CommandType = "stop"
-	CmdSkip   CommandType = "skip"
-	CmdBack   CommandType = "back"
-	CmdVolume CommandType = "volume"
+	CmdPlay    CommandType = "play"
+	CmdPause   CommandType = "pause"
+	CmdStop    CommandType = "stop"
+	CmdSkip    CommandType = "skip"
+	CmdBack    CommandType = "back"
+	CmdVolume  CommandType = "volume"
+	CmdShuffle CommandType = "shuffle"
 
-	// Info commands
 	CmdStatus CommandType = "status"
 	CmdList   CommandType = "list"
 )
 
-// Command represents a command sent to the daemon
 type Command struct {
-	Type   CommandType `json:"type"`
-	Args   []string    `json:"args,omitempty"`
-	Count  int         `json:"count,omitempty"`  // For skip/back amounts (default 1)
-	Volume int         `json:"volume,omitempty"` // For volume commands (0-100, -1 = get current)
-	Source SourceType  `json:"source,omitempty"` // For start command
-	Path   string      `json:"path,omitempty"`   // Path to folder/playlist/etc
+	Type    CommandType `json:"type"`
+	Args    []string    `json:"args,omitempty"`
+	Count   int         `json:"count,omitempty"`
+	Volume  int         `json:"volume,omitempty"`
+	Source  SourceType  `json:"source,omitempty"`
+	Path    string      `json:"path,omitempty"`
+	Shuffle bool        `json:"shuffle,omitempty"`
 }
 
-// Response represents a response from the daemon
 type Response struct {
 	Success bool        `json:"success"`
 	Message string      `json:"message,omitempty"`
