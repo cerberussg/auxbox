@@ -12,9 +12,9 @@ import (
 type RepeatMode int
 
 const (
-	RepeatOff RepeatMode = iota // Stop at end of playlist
-	RepeatAll                   // Loop entire playlist
-	RepeatOne                   // Repeat current track
+	RepeatOff RepeatMode = iota
+	RepeatAll
+	RepeatOne
 )
 
 type Playlist struct {
@@ -63,7 +63,7 @@ func (p *Playlist) GetCurrentIndex() int {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.currentIdx
-}
+} // Stop at end of playlist
 
 func (p *Playlist) Next() bool {
 	p.mu.Lock()

@@ -19,6 +19,7 @@ A lightweight CLI music player for background listening with daemon architecture
 - **Play/Pause/Stop** - Full playback control
 - **Skip/Back** - Navigate tracks with optional count (e.g., `skip 3`)
 - **Shuffle mode** - Random track selection with toggle support
+- **Repeat modes** - Off (default), repeat-all (loop playlist), repeat-one (loop track)
 - **Volume control** - Set volume from 0-100%
 
 ### Source Types
@@ -96,6 +97,8 @@ move auxbox.exe C:\auxbox\
 auxbox play -f ~/Music/Albums/new-album/       # Load folder and play instantly
 auxbox play --folder ~/Music/collection/       # Same as above (long form)
 auxbox play -f ~/Music/jazz -s                 # Load folder, enable shuffle, and play
+auxbox play -f ~/Music/chill -r                # Load folder with repeat-all enabled
+auxbox play -f ~/Music/workout -s -r           # Load folder, shuffle, and repeat-all
 auxbox play -p ~/playlists/favorites.m3u       # Load playlist and play instantly
 auxbox play --playlist ~/playlists/rock.m3u    # Same as above (long form)
 ```
@@ -127,6 +130,14 @@ auxbox back 2    # Go back 2 tracks
 ```bash
 auxbox shuffle   # Toggle shuffle on (random track selection)
 auxbox shuffle   # Toggle shuffle off (sequential playback)
+```
+
+**Repeat modes:**
+```bash
+auxbox repeat    # Cycle: off → repeat-all → repeat-one → off
+# First press:   Repeat all enabled (loops playlist)
+# Second press:  Repeat one enabled (loops current track)
+# Third press:   Repeat off (stops at end)
 ```
 
 **Information:**
@@ -178,6 +189,26 @@ auxbox play -f ~/Music/jazz-collection/
 auxbox play -f ~/Music/5300-track-library/ -s
 # Output: ✓ Loaded 5300 tracks from folder (shuffled) and started playback
 # Each track completion picks a random next track
+
+# Load with shuffle and repeat-all for infinite random playback
+auxbox play -f ~/Music/study-mix/ -s -r
+# Output: ✓ Loaded 42 tracks from folder (shuffled, repeat-all) and started playback
+# Plays random tracks forever
+
+# Enable repeat mode on current playlist
+auxbox repeat
+# Output: Repeat all enabled
+# Playlist will loop when it reaches the end
+
+# Cycle to repeat-one to loop current track
+auxbox repeat
+# Output: Repeat one enabled
+# Current track will replay indefinitely
+
+# Cycle back to repeat off
+auxbox repeat
+# Output: Repeat off
+# Playback stops at end of playlist
 
 # Toggle shuffle off for sequential playback
 auxbox shuffle
@@ -321,10 +352,12 @@ auxbox --version  # Show version information
 - `-s` flag for instant shuffle on load
 - Works with skip/back commands
 
-### Phase 3: Continuous Play
-- Auto-loop playlists and folders
+### Phase 3: Repeat Modes ✅
+- Three repeat modes: off (default), repeat-all, repeat-one
+- Toggle repeat modes with `auxbox repeat` command
+- `-r` flag for instant repeat-all on load
+- Auto-loop playlists and tracks
 - Seamless track transitions
-- Repeat mode options
 
 ### Phase 4: DJ Star Rating ⭐
 - 1-5 star rating system while listening
