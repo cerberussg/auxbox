@@ -13,6 +13,7 @@ const (
 	CmdBack    CommandType = "back"
 	CmdVolume  CommandType = "volume"
 	CmdShuffle CommandType = "shuffle"
+	CmdRepeat  CommandType = "repeat"
 
 	CmdStatus CommandType = "status"
 	CmdList   CommandType = "list"
@@ -26,6 +27,7 @@ type Command struct {
 	Source  SourceType  `json:"source,omitempty"`
 	Path    string      `json:"path,omitempty"`
 	Shuffle bool        `json:"shuffle,omitempty"`
+	Repeat  bool        `json:"repeat,omitempty"`
 }
 
 type Response struct {

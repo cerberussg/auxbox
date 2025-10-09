@@ -107,6 +107,8 @@ func (s *Server) handleCommand(cmd shared.Command) shared.Response {
 		return s.navigationHandler.HandleBack(cmd)
 	case shared.CmdShuffle:
 		return s.handleShuffleCommand()
+	case shared.CmdRepeat:
+		return s.handleRepeatCommand()
 	case shared.CmdStatus:
 		return s.infoHandler.HandleStatus()
 	case shared.CmdList:
@@ -164,6 +166,11 @@ func (s *Server) handlePlayWithSource(cmd shared.Command) shared.Response {
 		log.Println("Applied shuffle to loaded playlist")
 	}
 
+	if cmd.Repeat {
+		s.playlist.SetRepeatMode(playlist.RepeatAll)
+		log.Println("Applied repeat-all to loaded playlist")
+	}
+
 	firstTrack := s.playlist.GetCurrentTrack()
 	if firstTrack != nil {
 		s.player.SetCurrentTrack(firstTrack)
@@ -174,14 +181,26 @@ func (s *Server) handlePlayWithSource(cmd shared.Command) shared.Response {
 		return playResp
 	}
 
-	shuffleMsg := ""
+	var modes []string
 	if cmd.Shuffle {
-		shuffleMsg = " (shuffled)"
+		modes = append(modes, "shuffled")
+	}
+	if cmd.Repeat {
+		modes = append(modes, "repeat-all")
 	}
 
-	log.Printf("Loaded %d tracks from %s: %s%s and started playback", trackCount, cmd.Source, expandedPath, shuffleMsg)
+	modesMsg := ""
+	if len(modes) > 0 {
+		modesMsg = " (" + modes[0]
+		if len(modes) > 1 {
+			modesMsg += ", " + modes[1]
+		}
+		modesMsg += ")"
+	}
+
+	log.Printf("Loaded %d tracks from %s: %s%s and started playback", trackCount, cmd.Source, expandedPath, modesMsg)
 	return shared.NewSuccessResponse(
-		fmt.Sprintf("Loaded %d tracks from %s%s and started playback", trackCount, cmd.Source, shuffleMsg),
+		fmt.Sprintf("Loaded %d tracks from %s%s and started playback", trackCount, cmd.Source, modesMsg),
 		nil,
 	)
 }
@@ -203,6 +222,30 @@ func (s *Server) handleShuffleCommand() shared.Response {
 	}
 }
 
+func (s *Server) handleRepeatCommand() shared.Response {
+	trackCount := s.playlist.TrackCount()
+	if trackCount == 0 {
+		return shared.NewErrorResponse("No tracks loaded")
+	}
+
+	newMode := s.playlist.ToggleRepeat()
+
+	var message string
+	switch newMode {
+	case playlist.RepeatAll:
+		message = "Repeat all enabled"
+		log.Println("Repeat mode: all")
+	case playlist.RepeatOne:
+		message = "Repeat one enabled"
+		log.Println("Repeat mode: one")
+	case playlist.RepeatOff:
+		message = "Repeat off"
+		log.Println("Repeat mode: off")
+	}
+
+	return shared.NewSuccessResponse(message, nil)
+}
+
 func (s *Server) handleExitCommand() shared.Response {
 	go func() {
 		if err := s.player.Close(); err != nil {
@@ -217,7 +260,7 @@ func (s *Server) handleExitCommand() shared.Response {
 }
 
 func (s *Server) onTrackComplete() {
-	log.Println("Track completed, scheduling auto-advance to next track")
+	log.Println("Track completed, scheduling auto-advance")
 
 	go func() {
 		// Small delay to ensure the track completion callback has fully finished
@@ -226,7 +269,21 @@ func (s *Server) onTrackComplete() {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 
-		log.Println("Executing auto-advance to next track")
+		repeatMode := s.playlist.GetRepeatMode()
+
+		if repeatMode == playlist.RepeatOne {
+			log.Println("Repeat-one mode: replaying current track")
+			currentTrack := s.playlist.GetCurrentTrack()
+			if currentTrack != nil {
+				s.player.SetCurrentTrack(currentTrack)
+				if err := s.player.Play(); err != nil {
+					log.Printf("Failed to replay track: %v", err)
+				} else {
+					log.Printf("Now replaying: %s", currentTrack.Filename)
+				}
+			}
+			return
+		}
 
 		if s.playlist.Next() {
 			nextTrack := s.playlist.GetCurrentTrack()
@@ -243,8 +300,27 @@ func (s *Server) onTrackComplete() {
 			} else {
 				log.Println("Next track is nil, cannot advance")
 			}
+			return
+		}
+
+		if repeatMode == playlist.RepeatAll {
+			log.Println("Repeat-all mode: looping back to first track")
+			if s.playlist.SetCurrentIndex(0) {
+				firstTrack := s.playlist.GetCurrentTrack()
+				if firstTrack != nil {
+					log.Printf("Looping to first track: %s", firstTrack.Filename)
+
+					s.player.SetCurrentTrack(firstTrack)
+
+					if err := s.player.Play(); err != nil {
+						log.Printf("Failed to auto-play first track on loop: %v", err)
+					} else {
+						log.Printf("Now auto-playing (looped): %s", firstTrack.Filename)
+					}
+				}
+			}
 		} else {
-			log.Println("Reached end of playlist, playback complete")
+			log.Println("Reached end of playlist, playback complete (repeat off)")
 		}
 	}()
 }

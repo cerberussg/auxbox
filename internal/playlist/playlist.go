@@ -8,12 +8,22 @@ import (
 	"github.com/cerberussg/auxbox/internal/shared"
 )
 
+// RepeatMode represents the repeat/loop mode
+type RepeatMode int
+
+const (
+	RepeatOff RepeatMode = iota
+	RepeatAll
+	RepeatOne
+)
+
 type Playlist struct {
 	tracks     []*shared.Track
 	currentIdx int
 	source     string
 	sourceType shared.SourceType
 	isShuffled bool
+	repeatMode RepeatMode
 	mu         sync.RWMutex
 }
 
@@ -53,7 +63,7 @@ func (p *Playlist) GetCurrentIndex() int {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.currentIdx
-}
+} // Stop at end of playlist
 
 func (p *Playlist) Next() bool {
 	p.mu.Lock()
@@ -233,6 +243,34 @@ func (p *Playlist) IsShuffled() bool {
 	return p.isShuffled
 }
 
+func (p *Playlist) SetRepeatMode(mode RepeatMode) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.repeatMode = mode
+}
+
+func (p *Playlist) GetRepeatMode() RepeatMode {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.repeatMode
+}
+
+func (p *Playlist) ToggleRepeat() RepeatMode {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	switch p.repeatMode {
+	case RepeatOff:
+		p.repeatMode = RepeatAll
+	case RepeatAll:
+		p.repeatMode = RepeatOne
+	case RepeatOne:
+		p.repeatMode = RepeatOff
+	}
+
+	return p.repeatMode
+}
+
 func (p *Playlist) Clear() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -242,4 +280,5 @@ func (p *Playlist) Clear() {
 	p.source = ""
 	p.sourceType = ""
 	p.isShuffled = false
+	p.repeatMode = RepeatOff
 }
