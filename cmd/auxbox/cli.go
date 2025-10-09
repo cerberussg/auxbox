@@ -22,6 +22,8 @@ Usage:
   auxbox play -f <path>            Load folder and play instantly
   auxbox play --folder <path>      Load folder and play instantly
   auxbox play -f <path> -s         Load folder, shuffle, and play
+  auxbox play -f <path> -r         Load folder with repeat-all enabled
+  auxbox play -f <path> -s -r      Load folder, shuffle, with repeat-all
   auxbox play -p <path>            Load playlist and play instantly
   auxbox play --playlist <path>    Load playlist and play instantly
   auxbox play                      Resume playback (if paused)
@@ -30,6 +32,7 @@ Usage:
   auxbox skip [n]                  Skip forward n tracks (default: 1)
   auxbox back [n]                  Skip backward n tracks (default: 1)
   auxbox shuffle                   Toggle shuffle on/off
+  auxbox repeat                    Cycle repeat modes (off → all → one → off)
   auxbox volume [0-100]            Show or set volume percentage
   auxbox status                    Show current track info
   auxbox list                      List tracks in current queue
@@ -40,27 +43,26 @@ Usage:
 Examples:
   auxbox play -f ~/Downloads/new-pack/     # Instant music from folder
   auxbox play -f ~/jazz -s                 # Load folder, shuffle, and play
+  auxbox play -f ~/music -r                # Load folder with repeat-all
   auxbox play -p ~/playlists/workout.m3u  # Switch to playlist while playing
   auxbox shuffle                           # Toggle shuffle on current playlist
+  auxbox repeat                            # Cycle repeat modes
   auxbox skip 3
   auxbox volume 75
   auxbox pause
   auxbox exit`
 )
 
-// CLI handles command line interface logic
 type CLI struct {
 	transport shared.Transport
 }
 
-// NewCLI creates a new CLI instance
 func NewCLI() *CLI {
 	return &CLI{
 		transport: shared.NewUnixSocketTransport(),
 	}
 }
 
-// Run processes command line arguments and executes commands
 func (c *CLI) Run(args []string) {
 	if len(args) < 2 {
 		fmt.Println("No command provided. Use 'auxbox --help' for usage.")
@@ -94,6 +96,8 @@ func (c *CLI) Run(args []string) {
 		c.handleBackCommand(args)
 	case "shuffle":
 		c.sendCommand(shared.Command{Type: shared.CmdShuffle})
+	case "repeat":
+		c.sendCommand(shared.Command{Type: shared.CmdRepeat})
 	case "status":
 		c.sendCommand(shared.NewStatusCommand())
 	case "list":
@@ -109,7 +113,6 @@ func (c *CLI) Run(args []string) {
 		os.Exit(1)
 	}
 }
-
 
 func (c *CLI) handleSkipCommand(args []string) {
 	count := 1 // default
@@ -168,13 +171,16 @@ func (c *CLI) handlePlayCommand(args []string) {
 		os.Exit(1)
 	}
 
-	// Check for shuffle flag
+	// Check for shuffle and repeat flags
 	shuffle := false
+	repeat := false
 	if len(args) >= 5 {
 		for i := 4; i < len(args); i++ {
 			if args[i] == "-s" || args[i] == "--shuffle" {
 				shuffle = true
-				break
+			}
+			if args[i] == "-r" || args[i] == "--repeat" {
+				repeat = true
 			}
 		}
 	}
@@ -190,7 +196,7 @@ func (c *CLI) handlePlayCommand(args []string) {
 	if !transport.IsRunning() {
 		// Auto-start daemon with the provided source and begin playback
 		fmt.Printf("Starting auxbox daemon with %s: %s\n", sourceType, sourcePath)
-		c.startDaemonAndPlay(sourceType, sourcePath, shuffle)
+		c.startDaemonAndPlay(sourceType, sourcePath, shuffle, repeat)
 		return
 	}
 
@@ -199,6 +205,7 @@ func (c *CLI) handlePlayCommand(args []string) {
 	cmd.Source = sourceType
 	cmd.Path = sourcePath
 	cmd.Shuffle = shuffle
+	cmd.Repeat = repeat
 	c.sendCommand(cmd)
 }
 
@@ -395,7 +402,7 @@ func (c *CLI) handleVolumeCommand(args []string) {
 }
 
 // startDaemonAndPlay starts the daemon and immediately begins playback
-func (c *CLI) startDaemonAndPlay(sourceType shared.SourceType, sourcePath string, shuffle bool) {
+func (c *CLI) startDaemonAndPlay(sourceType shared.SourceType, sourcePath string, shuffle bool, repeat bool) {
 	// Check if we're being called as the daemon itself
 	if len(os.Args) >= 3 && os.Args[1] == "_daemon" {
 		c.runDaemonProcess(sourceType, sourcePath)
@@ -437,6 +444,7 @@ func (c *CLI) startDaemonAndPlay(sourceType shared.SourceType, sourcePath string
 	playCmd.Source = sourceType
 	playCmd.Path = sourcePath
 	playCmd.Shuffle = shuffle
+	playCmd.Repeat = repeat
 	resp, err := transport.Send(playCmd)
 	if err != nil {
 		fmt.Printf("Failed to initialize daemon: %v\n", err)
@@ -455,24 +463,8 @@ func (c *CLI) startDaemonAndPlay(sourceType shared.SourceType, sourcePath string
 func (c *CLI) runDaemonProcess(sourceType shared.SourceType, sourcePath string) {
 	server := server.NewServer()
 
-	// Load tracks based on source type and path before starting server
-	log.Printf("Loading tracks from %s (type: %s)", sourcePath, sourceType)
-
-	switch sourceType {
-	case shared.SourceFolder:
-		if err := server.LoadFolder(sourcePath); err != nil {
-			log.Printf("Failed to load tracks from folder: %v", err)
-			os.Exit(1)
-		}
-	case shared.SourcePlaylist:
-		if err := server.LoadPlaylist(sourcePath); err != nil {
-			log.Printf("Failed to load tracks from playlist: %v", err)
-			os.Exit(1)
-		}
-	default:
-		log.Printf("Unsupported source type: %s", sourceType)
-		os.Exit(1)
-	}
+	// Don't pre-load tracks - let the play command handle loading with proper flags
+	log.Printf("Starting daemon (will load %s: %s on first play command)", sourceType, sourcePath)
 
 	// Start the server (this will block)
 	if err := server.Start(); err != nil {
