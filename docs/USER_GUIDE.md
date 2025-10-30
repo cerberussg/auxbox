@@ -460,6 +460,36 @@ alias workout='auxbox play -p ~/playlists/high-energy.m3u -s -r'
 watch -n 5 auxbox status
 ```
 
+### Waybar Integration (Hyprland)
+
+If you use Hyprland with Waybar, you can add auxbox to your status bar with interactive controls:
+
+**Add to `~/.config/waybar/config.jsonc`:**
+
+```jsonc
+{
+  // Add "custom/auxbox" to your modules array
+  "modules-center": ["clock", "custom/auxbox"],
+
+  // Define the auxbox module
+  "custom/auxbox": {
+    "interval": 5,
+    "exec": "auxbox status",
+    "on-click": "auxbox pause",
+    "on-double-click": "auxbox play",
+    "on-click-right": "auxbox skip"
+  }
+}
+```
+
+**Features:**
+- **Auto-refresh** - Updates status every 5 seconds
+- **Left click** - Pause playback
+- **Double click** - Resume playback
+- **Right click** - Skip to next track
+
+The status bar will display your current track information directly in Waybar!
+
 ### Background Daemon
 
 Remember: auxbox runs in the background. You can:
