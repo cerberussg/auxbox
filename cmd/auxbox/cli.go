@@ -26,6 +26,7 @@ Usage:
   auxbox play -f <path> -s -r      Load folder, shuffle, with repeat-all
   auxbox play -p <path>            Load playlist and play instantly
   auxbox play --playlist <path>    Load playlist and play instantly
+  auxbox play <number>             Jump to track number and play
   auxbox play                      Resume playback (if paused)
   auxbox pause                     Pause playback
   auxbox stop                      Stop playback (reset to beginning)
@@ -34,7 +35,8 @@ Usage:
   auxbox shuffle                   Toggle shuffle on/off
   auxbox repeat                    Cycle repeat modes (off → all → one → off)
   auxbox volume [0-100]            Show or set volume percentage
-  auxbox status                    Show current track info
+  auxbox status                    Show current track info (compact, one-line)
+  auxbox status -d                 Show detailed track info with ID3 metadata
   auxbox list                      List tracks in current queue
   auxbox exit                      Exit daemon (stop everything)
   auxbox --help, -h                Show this help
@@ -45,6 +47,7 @@ Examples:
   auxbox play -f ~/jazz -s                 # Load folder, shuffle, and play
   auxbox play -f ~/music -r                # Load folder with repeat-all
   auxbox play -p ~/playlists/workout.m3u  # Switch to playlist while playing
+  auxbox play 905                          # Jump to track 905 and play
   auxbox shuffle                           # Toggle shuffle on current playlist
   auxbox repeat                            # Cycle repeat modes
   auxbox skip 3
@@ -99,7 +102,7 @@ func (c *CLI) Run(args []string) {
 	case "repeat":
 		c.sendCommand(shared.Command{Type: shared.CmdRepeat})
 	case "status":
-		c.sendCommand(shared.NewStatusCommand())
+		c.handleStatusCommand(args)
 	case "list":
 		c.sendCommand(shared.NewListCommand())
 	case "stop":
@@ -112,6 +115,19 @@ func (c *CLI) Run(args []string) {
 		fmt.Printf("Unknown command: %s\nUse 'auxbox --help' for usage.\n", command)
 		os.Exit(1)
 	}
+}
+
+func (c *CLI) handleStatusCommand(args []string) {
+	detailed := false
+
+	// Check for -d or --detailed flag
+	if len(args) > 2 {
+		if args[2] == "-d" || args[2] == "--detailed" {
+			detailed = true
+		}
+	}
+
+	c.sendStatusCommand(detailed)
 }
 
 func (c *CLI) handleSkipCommand(args []string) {
@@ -149,11 +165,22 @@ func (c *CLI) handlePlayCommand(args []string) {
 		return
 	}
 
+	// Check if arg is a track number
+	if trackNum, err := strconv.Atoi(args[2]); err == nil {
+		// It's a number - jump to that track
+		if trackNum < 1 {
+			fmt.Printf("Track number must be >= 1, got %d\n", trackNum)
+			os.Exit(1)
+		}
+		c.sendCommand(shared.NewPlayTrackCommand(trackNum))
+		return
+	}
+
 	// Parse source flags
 	sourceFlag := args[2]
 	if len(args) < 4 {
 		fmt.Printf("Source flag %s requires a path.\n", sourceFlag)
-		fmt.Println("Usage: auxbox play -f <folder> | -p <playlist> [-s]")
+		fmt.Println("Usage: auxbox play -f <folder> | -p <playlist> [-s] | auxbox play <track-number>")
 		os.Exit(1)
 	}
 
@@ -209,6 +236,31 @@ func (c *CLI) handlePlayCommand(args []string) {
 	c.sendCommand(cmd)
 }
 
+func (c *CLI) sendStatusCommand(detailed bool) {
+	// Check if daemon is running
+	transport := shared.NewUnixSocketTransport()
+	if !transport.IsRunning() {
+		fmt.Printf("auxbox daemon is not running.\n")
+		fmt.Printf("Start it with: auxbox play -f <path>\n")
+		os.Exit(1)
+	}
+
+	// Send command
+	resp, err := transport.Send(shared.NewStatusCommand())
+	if err != nil {
+		fmt.Printf("Error sending command: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Handle response
+	if !resp.Success {
+		fmt.Printf("Command failed: %s\n", resp.Message)
+		os.Exit(1)
+	}
+
+	c.printStatusResponse(resp, detailed)
+}
+
 func (c *CLI) sendCommand(cmd shared.Command) {
 	// Check if daemon is running
 	transport := shared.NewUnixSocketTransport()
@@ -233,8 +285,6 @@ func (c *CLI) sendCommand(cmd shared.Command) {
 
 	// Print response based on command type
 	switch cmd.Type {
-	case shared.CmdStatus:
-		c.printStatusResponse(resp)
 	case shared.CmdList:
 		c.printListResponse(resp)
 	case shared.CmdVolume:
@@ -252,7 +302,7 @@ func (c *CLI) sendCommand(cmd shared.Command) {
 	}
 }
 
-func (c *CLI) printStatusResponse(resp *shared.Response) {
+func (c *CLI) printStatusResponse(resp *shared.Response, detailed bool) {
 	if resp.Data == nil {
 		fmt.Println("No track currently playing.")
 		return
@@ -261,30 +311,85 @@ func (c *CLI) printStatusResponse(resp *shared.Response) {
 	// Data comes back as map[string]interface{} after JSON round-trip
 	if dataMap, ok := resp.Data.(map[string]interface{}); ok {
 		filename := c.getStringFromMap(dataMap, "filename", "Unknown")
+		fullPath := c.getStringFromMap(dataMap, "path", "")
 		duration := c.getStringFromMap(dataMap, "duration", "")
 		position := c.getStringFromMap(dataMap, "position", "")
 		trackNum := c.getIntFromMap(dataMap, "track_number", 0)
 		totalTracks := c.getIntFromMap(dataMap, "total_tracks", 0)
 		source := c.getStringFromMap(dataMap, "source", "")
 
-		// Build status line: "▶ filename | position/duration | Track N/total | Source: path"
-		status := fmt.Sprintf("▶ %s", filename)
+		// Metadata fields
+		title := c.getStringFromMap(dataMap, "title", "")
+		artist := c.getStringFromMap(dataMap, "artist", "")
+		album := c.getStringFromMap(dataMap, "album", "")
+		year := c.getStringFromMap(dataMap, "year", "")
+		label := c.getStringFromMap(dataMap, "label", "")
+		rating := c.getIntFromMap(dataMap, "rating", 0)
+		genre := c.getStringFromMap(dataMap, "genre", "")
 
-		if position != "" && duration != "" {
-			status += fmt.Sprintf(" | %s/%s", position, duration)
-		} else if duration != "" {
-			status += fmt.Sprintf(" | %s", duration)
+		if detailed {
+			// Detailed format: structured key | value with metadata
+			fmt.Println()
+			fmt.Printf("Filename      | %s\n", filename)
+
+			// Extract just the directory path (no filename)
+			dirPath := filepath.Dir(fullPath)
+			fmt.Printf("Folder        | %s\n", dirPath)
+			fmt.Printf("Track         | %d/%d\n", trackNum, totalTracks)
+			fmt.Printf("Position      | %s / %s\n", position, duration)
+			fmt.Printf("Source        | %s\n", source)
+
+			// Print metadata if available
+			hasMetadata := title != "" || artist != "" || album != "" || year != "" || label != "" || rating > 0 || genre != ""
+			if hasMetadata {
+				fmt.Println("\n--- ID3 Metadata ---")
+				if title != "" {
+					fmt.Printf("Title         | %s\n", title)
+				}
+				if artist != "" {
+					fmt.Printf("Artist        | %s\n", artist)
+				}
+				if album != "" {
+					fmt.Printf("Album         | %s\n", album)
+				}
+				if year != "" {
+					fmt.Printf("Year          | %s\n", year)
+				}
+				if label != "" {
+					fmt.Printf("Label         | %s\n", label)
+				}
+				if rating > 0 {
+					stars := ""
+					for i := 0; i < rating; i++ {
+						stars += "⭐"
+					}
+					fmt.Printf("Rating        | %d/5 %s\n", rating, stars)
+				}
+				if genre != "" {
+					fmt.Printf("Genre         | %s\n", genre)
+				}
+			}
+			fmt.Println()
+		} else {
+			// Compact format: one-line for waybar
+			status := fmt.Sprintf("▶ %s", filename)
+
+			if position != "" && duration != "" {
+				status += fmt.Sprintf(" | %s/%s", position, duration)
+			} else if duration != "" {
+				status += fmt.Sprintf(" | %s", duration)
+			}
+
+			if trackNum > 0 && totalTracks > 0 {
+				status += fmt.Sprintf(" | Track %d/%d", trackNum, totalTracks)
+			}
+
+			if source != "" {
+				status += fmt.Sprintf(" | Source: %s", source)
+			}
+
+			fmt.Println(status)
 		}
-
-		if trackNum > 0 && totalTracks > 0 {
-			status += fmt.Sprintf(" | Track %d/%d", trackNum, totalTracks)
-		}
-
-		if source != "" {
-			status += fmt.Sprintf(" | Source: %s", source)
-		}
-
-		fmt.Println(status)
 	} else {
 		fmt.Printf("Status: %s\n", resp.Message)
 	}

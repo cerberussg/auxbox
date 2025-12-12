@@ -23,6 +23,15 @@ type TrackInfo struct {
 	TrackNumber int    `json:"track_number,omitempty"` // Current track in queue
 	TotalTracks int    `json:"total_tracks,omitempty"` // Total tracks in queue
 	Source      string `json:"source,omitempty"`       // Source folder/playlist name
+
+	// Metadata fields (ID3 tags for MP3)
+	Title  string `json:"title,omitempty"`
+	Artist string `json:"artist,omitempty"`
+	Album  string `json:"album,omitempty"`
+	Year   string `json:"year,omitempty"`
+	Label  string `json:"label,omitempty"`  // Record label
+	Rating int    `json:"rating,omitempty"` // 0-5 rating
+	Genre  string `json:"genre,omitempty"`
 }
 
 type PlaylistInfo struct {

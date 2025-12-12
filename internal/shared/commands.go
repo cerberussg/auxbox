@@ -20,14 +20,15 @@ const (
 )
 
 type Command struct {
-	Type    CommandType `json:"type"`
-	Args    []string    `json:"args,omitempty"`
-	Count   int         `json:"count,omitempty"`
-	Volume  int         `json:"volume,omitempty"`
-	Source  SourceType  `json:"source,omitempty"`
-	Path    string      `json:"path,omitempty"`
-	Shuffle bool        `json:"shuffle,omitempty"`
-	Repeat  bool        `json:"repeat,omitempty"`
+	Type       CommandType `json:"type"`
+	Args       []string    `json:"args,omitempty"`
+	Count      int         `json:"count,omitempty"`
+	Volume     int         `json:"volume,omitempty"`
+	Source     SourceType  `json:"source,omitempty"`
+	Path       string      `json:"path,omitempty"`
+	Shuffle    bool        `json:"shuffle,omitempty"`
+	Repeat     bool        `json:"repeat,omitempty"`
+	TrackIndex int         `json:"track_index,omitempty"` // Jump to specific track (1-based)
 }
 
 type Response struct {

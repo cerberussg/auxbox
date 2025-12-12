@@ -123,11 +123,56 @@ func (s *Server) handleCommand(cmd shared.Command) shared.Response {
 }
 
 func (s *Server) handlePlayCommand(cmd shared.Command) shared.Response {
+	// Check if this is a "jump to track" command
+	if cmd.TrackIndex > 0 {
+		return s.handlePlayTrack(cmd.TrackIndex)
+	}
+
 	if cmd.Path != "" && cmd.Source != "" {
 		return s.handlePlayWithSource(cmd)
 	}
 
 	return s.playbackHandler.HandlePlay()
+}
+
+func (s *Server) handlePlayTrack(trackIndex int) shared.Response {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	trackCount := s.playlist.TrackCount()
+	if trackCount == 0 {
+		return shared.NewErrorResponse("No tracks loaded. Load a folder first with: auxbox play -f <path>")
+	}
+
+	// Convert from 1-based to 0-based index
+	zeroBasedIndex := trackIndex - 1
+
+	if zeroBasedIndex < 0 || zeroBasedIndex >= trackCount {
+		return shared.NewErrorResponse(fmt.Sprintf("Track %d not found (valid range: 1-%d)", trackIndex, trackCount))
+	}
+
+	// Jump to the track
+	if !s.playlist.SetCurrentIndex(zeroBasedIndex) {
+		return shared.NewErrorResponse(fmt.Sprintf("Failed to jump to track %d", trackIndex))
+	}
+
+	// Set the current track in the player
+	track := s.playlist.GetCurrentTrack()
+	if track == nil {
+		return shared.NewErrorResponse("Failed to get track")
+	}
+
+	s.player.SetCurrentTrack(track)
+
+	// Start playing
+	if err := s.player.Play(); err != nil {
+		return shared.NewErrorResponse(fmt.Sprintf("Failed to play track: %v", err))
+	}
+
+	return shared.NewSuccessResponse(
+		fmt.Sprintf("Playing track %d/%d: %s", trackIndex, trackCount, track.Filename),
+		nil,
+	)
 }
 
 func (s *Server) handlePlayWithSource(cmd shared.Command) shared.Response {

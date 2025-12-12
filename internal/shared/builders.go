@@ -6,6 +6,13 @@ func NewPlayCommand() Command {
 	return Command{Type: CmdPlay}
 }
 
+func NewPlayTrackCommand(trackIndex int) Command {
+	return Command{
+		Type:       CmdPlay,
+		TrackIndex: trackIndex,
+	}
+}
+
 func NewPauseCommand() Command {
 	return Command{Type: CmdPause}
 }
