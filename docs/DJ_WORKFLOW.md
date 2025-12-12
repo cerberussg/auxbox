@@ -1,24 +1,17 @@
 # DJ Workflow Guide
 
-> **📋 Status:** This document describes planned DJ features. Phase 4 is in planning, Phases 5-6 are vision/future work. Command syntax and implementation details are subject to change.
+> **✅ Status:** Phase 4 complete! All metadata editing features are implemented and available now.
 
 auxbox doubles as a powerful DJ preparation tool, allowing you to rate, tag, and organize tracks while listening - perfect for preparing your music library without opening heavyweight DJ software.
-
-## Feature Status Legend
-
-- **✅ Implemented** - Feature is complete and available now
-- **🚧 In Planning** - Feature is being designed for Phase 4, details may change
-- **📋 Planned Vision** - Future phase concept, syntax and approach TBD
 
 ## Table of Contents
 
 - [Overview](#overview)
-- [Star Rating System](#star-rating-system) 🚧
-- [Genre Tagging](#genre-tagging) 📋
-- [Label Tracking](#label-tracking) 📋
-- [Rekordbox Integration](#rekordbox-integration) 🚧
-- [Complete DJ Workflows](#complete-dj-workflows) 📋
-- [Energy Level Organization](#energy-level-organization) 📋
+- [Star Rating System](#star-rating-system) ✅
+- [Metadata Editing](#metadata-editing) ✅
+- [Rekordbox Integration](#rekordbox-integration) ✅
+- [Mixxx Integration](#mixxx-integration) ✅
+- [Complete DJ Workflows](#complete-dj-workflows) ✅
 
 ## Overview
 
@@ -33,26 +26,27 @@ auxbox aims to provide a lightweight CLI interface to accomplish all of this dur
 
 ## Star Rating System
 
-**🚧 Status: Phase 4 - In Planning**
-
-> **Note:** Command syntax below is proposed and subject to change during implementation.
+**✅ Status: Implemented - Phase 4 Complete**
 
 Rate tracks on the fly while listening to build your energy-level system:
 
 ```bash
-# Preview new tracks (✅ Available now)
+# Preview new tracks
 auxbox play -f ~/new-tracks-pack/
 
-# Rate the current track (1-5 stars) - 🚧 Planned command
-auxbox stars 5    # Peak-hour banger
-auxbox stars 4    # High energy, main set material
-auxbox stars 3    # Solid track, versatile
-auxbox stars 2    # Good opener/breakdown track
-auxbox stars 1    # Low energy, intro/outro material
+# Rate the current track (1-5 stars)
+auxbox rate 5    # Peak-hour banger
+auxbox rate 4    # High energy, main set material
+auxbox rate 3    # Solid track, versatile
+auxbox rate 2    # Good opener/breakdown track
+auxbox rate 1    # Low energy, intro/outro material
 
 # Skip to next track and continue rating
-auxbox skip       # ✅ Available now
-auxbox stars 4    # 🚧 Planned command
+auxbox skip
+auxbox rate 4
+
+# View rating in detailed status
+auxbox status -d
 ```
 
 ### Rating Strategy
@@ -72,21 +66,65 @@ auxbox stars 4    # 🚧 Planned command
 
 Choose a consistent system and stick with it across your library.
 
-## Genre Tagging
+## Metadata Editing
 
-**📋 Status: Phase 5 - Planned Vision**
+**✅ Status: Implemented - Phase 4 Complete**
 
-> **Note:** This feature is planned for a future phase. Command syntax and implementation approach are not yet designed.
-
-Categorize tracks by style during preview sessions:
+Edit complete track metadata while listening. All changes write to ID3v2 tags (MP3 files only currently):
 
 ```bash
-# Tag genres while listening - 📋 Future concept
+# Complete metadata workflow
+auxbox play -f ~/new-tracks/
+
+# Set all metadata
+auxbox rate 5                    # 1-5 star rating
+auxbox label "Drumcode"          # Record label
+auxbox genre "Techno"            # Genre
+auxbox title "Peak Hour Tool"    # Track title
+auxbox artist "Adam Beyer"       # Artist name
+auxbox album "Drumcode EP"       # Album name
+auxbox year "2024"               # Release year
+
+# View everything
+auxbox status -d
+```
+
+### Supported Metadata Fields
+
+| Command | ID3 Frame | Description |
+|---------|-----------|-------------|
+| `auxbox rate <1-5>` | POPM | Star rating (Popularimeter) |
+| `auxbox label "<label>"` | TPUB | Record label (Publisher) |
+| `auxbox genre "<genre>"` | TCON | Genre (Content Type) |
+| `auxbox title "<title>"` | TIT2 | Track title |
+| `auxbox artist "<artist>"` | TPE1 | Artist name |
+| `auxbox album "<album>"` | TALB | Album name |
+| `auxbox year "<year>"` | TYER/TDRC | Release year |
+
+### Safety Features
+
+- **Atomic writes** - Backup created before each edit
+- **Auto-restore** - File restored if write fails
+- **Format validation** - Only MP3 files supported (AIFF planned)
+- **Error handling** - Clear error messages for invalid input
+
+## Genre Tagging
+
+**✅ Status: Implemented - Phase 4 Complete**
+
+Organize your library by genre during casual listening:
+
+```bash
+# Tag genres while listening
 auxbox genre "Deep House"
 auxbox genre "Tech House"
 auxbox genre "Progressive Trance"
 auxbox genre "Melodic Techno"
 auxbox genre "Minimal Tech"
+
+# Skip and continue tagging
+auxbox skip
+auxbox genre "Peak Time Techno"
 ```
 
 ### Genre Organization Benefits
@@ -112,19 +150,21 @@ auxbox genre "Minimal Tech"
 
 ## Label Tracking
 
-**📋 Status: Phase 6 - Planned Vision**
-
-> **Note:** This feature is planned for a future phase. Command syntax and implementation approach are not yet designed.
+**✅ Status: Implemented - Phase 4 Complete**
 
 Track the source/label for discovery and organization:
 
 ```bash
-# Tag record labels while listening - 📋 Future concept
+# Tag record labels while listening
 auxbox label "Defected Records"
 auxbox label "Anjunadeep"
 auxbox label "Drumcode"
 auxbox label "Hot Creations"
 auxbox label "Toolroom"
+
+# Skip and continue
+auxbox skip
+auxbox label "Afterlife"
 ```
 
 ### Label Tracking Benefits
@@ -136,25 +176,28 @@ auxbox label "Toolroom"
 
 ## Rekordbox Integration
 
-**🚧 Status: Phase 4 Planning**
+**✅ Status: Implemented - Phase 4 Complete**
 
-> **Note:** Integration strategy is being designed. Implementation details below are proposed approaches.
-
-All metadata written by auxbox will use industry-standard ID3v2 tags that rekordbox reads natively.
+All metadata written by auxbox uses industry-standard ID3v2 tags that Rekordbox reads natively.
 
 ### Metadata Field Mapping
 
-| auxbox Feature | ID3v2 Tag | rekordbox Field | Phase |
-|----------------|-----------|-----------------|-------|
-| Star Rating    | POPM      | Rating (stars)  | Phase 4 (In Development) |
-| Genre          | TCON      | Genre           | Phase 5 (Planned) |
-| Label          | TPUB      | Label           | Phase 6 (Planned) |
+| auxbox Command | ID3v2 Tag | Rekordbox Field | Status |
+|----------------|-----------|-----------------|--------|
+| `auxbox rate` | POPM | Rating (stars) | ✅ Implemented |
+| `auxbox genre` | TCON | Genre | ✅ Implemented |
+| `auxbox label` | TPUB | Label | ✅ Implemented |
+| `auxbox title` | TIT2 | Track Name | ✅ Implemented |
+| `auxbox artist` | TPE1 | Artist | ✅ Implemented |
+| `auxbox album` | TALB | Album | ✅ Implemented |
+| `auxbox year` | TYER/TDRC | Year | ✅ Implemented |
 
 ### How Integration Works
 
-1. **auxbox writes to audio files** - Metadata is embedded directly in MP3/WAV/AIFF files
-2. **rekordbox reads on import** - When you import tracks, rekordbox detects existing metadata
-3. **No duplicate work** - Your ratings, genres, and labels appear automatically
+1. **auxbox writes to MP3 files** - Metadata is embedded directly in ID3v2 tags
+2. **Rekordbox reads on re-import** - Re-import tracks to sync metadata
+3. **Ratings appear as stars** - 1-5 rating displays as ⭐ to ⭐⭐⭐⭐⭐
+4. **Labels and genres populate** - All metadata fields sync automatically
 
 ### Rekordbox Database Challenge
 
@@ -172,48 +215,81 @@ auxbox can write to ID3v2 tags, but directly writing to the rekordbox database p
 
 ### Integration Strategy
 
-**Phase 4 will implement:**
-- ID3v2 POPM frame writing (standardized metadata)
-- Rekordbox import detection (triggers rekordbox to read POPM tags)
-- Compatibility testing with rekordbox 6.x
+**Currently implemented:**
+- ✅ ID3v2 tag writing (POPM, TCON, TPUB, etc.)
+- ✅ Re-import workflow with Rekordbox 6.x/7.x
+- ✅ All metadata fields supported
 
 **Workflow:**
-1. Rate tracks in auxbox (writes to ID3v2)
-2. Import/re-import tracks in rekordbox
-3. rekordbox reads ratings from ID3v2 tags
-4. Ratings appear in rekordbox interface
+1. Rate and tag tracks in auxbox (writes to ID3v2)
+2. Re-import tracks in Rekordbox (File → Import Tracks)
+3. Rekordbox reads all metadata from ID3v2 tags
+4. Ratings, genres, labels appear in Rekordbox interface
 
-**Future consideration:**
-- Research rekordbox XML export/import as alternative sync method
-- Investigate rekordbox API if officially documented
+**Limitations:**
+- MP3 files only (AIFF support planned for Phase 4.5+)
+- Requires re-import (not real-time sync)
+
+## Mixxx Integration
+
+**✅ Status: Implemented - Phase 4 Complete**
+
+Mixxx reads ID3v2 tags directly from files, making integration seamless.
+
+### Setup
+
+Enable file tag syncing in Mixxx:
+1. Open Mixxx Preferences
+2. Go to Library section
+3. Enable "Sync track metadata to file tags"
+
+### Workflow
+
+```bash
+# Rate and tag in auxbox
+auxbox play -f ~/music
+auxbox rate 4
+auxbox genre "Techno"
+auxbox label "Drumcode"
+
+# Sync in Mixxx
+# Right-click track → "Reload from File Tags"
+# Or restart Mixxx to pick up changes
+```
+
+### Supported Fields
+
+All auxbox metadata commands sync with Mixxx:
+- Rating (1-5 stars)
+- Genre
+- Title, Artist, Album, Year
+- Label (Publisher field)
 
 ## Complete DJ Workflows
 
-**📋 Status: Aspirational workflows showing planned features**
-
-> **Note:** Workflows below combine implemented features (✅) with planned commands (🚧📋). Full workflow will be available once all phases are complete.
+**✅ Status: All workflows now fully functional!**
 
 ### New Promo Pack Evaluation
 
 ```bash
-# Load new promo pack (✅ Available now)
+# Load new promo pack
 auxbox play -f ~/promos/december-2024/
 
 # Listen and rate each track
-auxbox status                    # ✅ Check current track
-auxbox stars 4                   # 🚧 Rate it (Phase 4)
-auxbox genre "Deep House"        # 📋 Tag genre (Phase 5)
-auxbox label "Hot Creations"     # 📋 Tag label (Phase 6)
+auxbox status                    # Check current track
+auxbox rate 4                    # Rate it
+auxbox genre "Deep House"        # Tag genre
+auxbox label "Hot Creations"     # Tag label
 
-auxbox skip                      # ✅ Next track
-auxbox stars 2                   # 🚧 Opener material (Phase 4)
-auxbox genre "Minimal Tech"      # 📋 (Phase 5)
-auxbox label "Percomaniacs"      # 📋 (Phase 6)
+auxbox skip                      # Next track
+auxbox rate 2                    # Opener material
+auxbox genre "Minimal Tech"      # Tag genre
+auxbox label "Percomaniacs"      # Tag label
 
-auxbox skip 3                    # ✅ Jump ahead to interesting track
-auxbox stars 5                   # 🚧 Peak hour material (Phase 4)
-auxbox genre "Peak Time Techno"  # 📋 (Phase 5)
-auxbox label "Drumcode"          # 📋 (Phase 6)
+auxbox skip 3                    # Jump ahead
+auxbox rate 5                    # Peak hour material!
+auxbox genre "Peak Time Techno"  # Tag genre
+auxbox label "Drumcode"          # Tag label
 
 # When done (✅ Available now)
 auxbox exit
