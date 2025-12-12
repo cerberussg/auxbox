@@ -59,6 +59,55 @@ func NewExitCommand() Command {
 	return Command{Type: CmdExit}
 }
 
+func NewRateCommand(rating int) Command {
+	return Command{
+		Type:   CmdRate,
+		Rating: rating,
+	}
+}
+
+func NewLabelCommand(label string) Command {
+	return Command{
+		Type:  CmdLabel,
+		Label: label,
+	}
+}
+
+func NewGenreCommand(genre string) Command {
+	return Command{
+		Type:  CmdGenre,
+		Genre: genre,
+	}
+}
+
+func NewTitleCommand(title string) Command {
+	return Command{
+		Type:  CmdTitle,
+		Title: title,
+	}
+}
+
+func NewArtistCommand(artist string) Command {
+	return Command{
+		Type:   CmdArtist,
+		Artist: artist,
+	}
+}
+
+func NewAlbumCommand(album string) Command {
+	return Command{
+		Type:  CmdAlbum,
+		Album: album,
+	}
+}
+
+func NewYearCommand(year string) Command {
+	return Command{
+		Type: CmdYear,
+		Year: year,
+	}
+}
+
 // Response builders - helper methods for creating common responses
 
 func NewSuccessResponse(message string, data interface{}) Response {

@@ -17,6 +17,14 @@ const (
 
 	CmdStatus CommandType = "status"
 	CmdList   CommandType = "list"
+
+	CmdRate   CommandType = "rate"
+	CmdLabel  CommandType = "label"
+	CmdGenre  CommandType = "genre"
+	CmdTitle  CommandType = "title"
+	CmdArtist CommandType = "artist"
+	CmdAlbum  CommandType = "album"
+	CmdYear   CommandType = "year"
 )
 
 type Command struct {
@@ -29,6 +37,13 @@ type Command struct {
 	Shuffle    bool        `json:"shuffle,omitempty"`
 	Repeat     bool        `json:"repeat,omitempty"`
 	TrackIndex int         `json:"track_index,omitempty"` // Jump to specific track (1-based)
+	Rating     int         `json:"rating,omitempty"`      // 1-5 rating
+	Label      string      `json:"label,omitempty"`       // Record label name
+	Genre      string      `json:"genre,omitempty"`       // Music genre
+	Title      string      `json:"title,omitempty"`       // Track title
+	Artist     string      `json:"artist,omitempty"`      // Track artist
+	Album      string      `json:"album,omitempty"`       // Album name
+	Year       string      `json:"year,omitempty"`        // Release year
 }
 
 type Response struct {

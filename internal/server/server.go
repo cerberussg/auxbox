@@ -23,6 +23,7 @@ type Server struct {
 	playbackHandler   *commands.PlaybackHandler
 	navigationHandler *commands.NavigationHandler
 	infoHandler       *commands.InfoHandler
+	metadataHandler   *commands.MetadataHandler
 	loader            *Loader
 }
 
@@ -39,6 +40,7 @@ func NewServer() *Server {
 		playbackHandler:   commands.NewPlaybackHandler(player, playlistObj),
 		navigationHandler: commands.NewNavigationHandler(player, playlistObj),
 		infoHandler:       commands.NewInfoHandler(player, playlistObj),
+		metadataHandler:   commands.NewMetadataHandler(playlistObj),
 		loader:            NewLoader(),
 	}
 
@@ -115,6 +117,20 @@ func (s *Server) handleCommand(cmd shared.Command) shared.Response {
 		return s.infoHandler.HandleList()
 	case shared.CmdVolume:
 		return s.infoHandler.HandleVolume(cmd)
+	case shared.CmdRate:
+		return s.metadataHandler.HandleRate(cmd)
+	case shared.CmdLabel:
+		return s.metadataHandler.HandleLabel(cmd)
+	case shared.CmdGenre:
+		return s.metadataHandler.HandleGenre(cmd)
+	case shared.CmdTitle:
+		return s.metadataHandler.HandleTitle(cmd)
+	case shared.CmdArtist:
+		return s.metadataHandler.HandleArtist(cmd)
+	case shared.CmdAlbum:
+		return s.metadataHandler.HandleAlbum(cmd)
+	case shared.CmdYear:
+		return s.metadataHandler.HandleYear(cmd)
 	case shared.CmdExit:
 		return s.handleExitCommand()
 	default:

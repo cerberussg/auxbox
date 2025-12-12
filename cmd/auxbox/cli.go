@@ -38,6 +38,13 @@ Usage:
   auxbox status                    Show current track info (compact, one-line)
   auxbox status -d                 Show detailed track info with ID3 metadata
   auxbox list                      List tracks in current queue
+  auxbox rate <1-5>                Rate current track (1-5 stars)
+  auxbox label "<label>"           Tag current track with record label
+  auxbox genre "<genre>"           Tag current track with genre
+  auxbox title "<title>"           Set track title
+  auxbox artist "<artist>"         Set track artist
+  auxbox album "<album>"           Set album name
+  auxbox year "<year>"             Set release year
   auxbox exit                      Exit daemon (stop everything)
   auxbox --help, -h                Show this help
   auxbox --version, -v             Show version
@@ -52,6 +59,11 @@ Examples:
   auxbox repeat                            # Cycle repeat modes
   auxbox skip 3
   auxbox volume 75
+  auxbox rate 5                            # Peak hour banger!
+  auxbox label "Drumcode"                  # Tag with label
+  auxbox genre "Techno"                    # Tag with genre
+  auxbox title "Acid Dreams"               # Set title
+  auxbox artist "DJ Name"                  # Set artist
   auxbox pause
   auxbox exit`
 )
@@ -109,6 +121,20 @@ func (c *CLI) Run(args []string) {
 		c.sendCommand(shared.NewStopCommand())
 	case "volume":
 		c.handleVolumeCommand(args)
+	case "rate":
+		c.handleRateCommand(args)
+	case "label":
+		c.handleLabelCommand(args)
+	case "genre":
+		c.handleGenreCommand(args)
+	case "title":
+		c.handleTitleCommand(args)
+	case "artist":
+		c.handleArtistCommand(args)
+	case "album":
+		c.handleAlbumCommand(args)
+	case "year":
+		c.handleYearCommand(args)
 	case "exit":
 		c.sendCommand(shared.NewExitCommand())
 	default:
@@ -504,6 +530,111 @@ func (c *CLI) handleVolumeCommand(args []string) {
 	}
 
 	c.sendCommand(shared.NewVolumeCommand(volume))
+}
+
+func (c *CLI) handleRateCommand(args []string) {
+	if len(args) < 3 {
+		fmt.Println("Usage: auxbox rate <1-5>")
+		os.Exit(1)
+	}
+
+	rating, err := strconv.Atoi(args[2])
+	if err != nil || rating < 1 || rating > 5 {
+		fmt.Printf("Invalid rating: %s (must be 1-5)\n", args[2])
+		os.Exit(1)
+	}
+
+	c.sendCommand(shared.NewRateCommand(rating))
+}
+
+func (c *CLI) handleLabelCommand(args []string) {
+	if len(args) < 3 {
+		fmt.Println("Usage: auxbox label \"<label name>\"")
+		os.Exit(1)
+	}
+
+	label := args[2]
+	if label == "" {
+		fmt.Println("Label cannot be empty")
+		os.Exit(1)
+	}
+
+	c.sendCommand(shared.NewLabelCommand(label))
+}
+
+func (c *CLI) handleGenreCommand(args []string) {
+	if len(args) < 3 {
+		fmt.Println("Usage: auxbox genre \"<genre name>\"")
+		os.Exit(1)
+	}
+
+	genre := args[2]
+	if genre == "" {
+		fmt.Println("Genre cannot be empty")
+		os.Exit(1)
+	}
+
+	c.sendCommand(shared.NewGenreCommand(genre))
+}
+
+func (c *CLI) handleTitleCommand(args []string) {
+	if len(args) < 3 {
+		fmt.Println("Usage: auxbox title \"<title>\"")
+		os.Exit(1)
+	}
+
+	title := args[2]
+	if title == "" {
+		fmt.Println("Title cannot be empty")
+		os.Exit(1)
+	}
+
+	c.sendCommand(shared.NewTitleCommand(title))
+}
+
+func (c *CLI) handleArtistCommand(args []string) {
+	if len(args) < 3 {
+		fmt.Println("Usage: auxbox artist \"<artist>\"")
+		os.Exit(1)
+	}
+
+	artist := args[2]
+	if artist == "" {
+		fmt.Println("Artist cannot be empty")
+		os.Exit(1)
+	}
+
+	c.sendCommand(shared.NewArtistCommand(artist))
+}
+
+func (c *CLI) handleAlbumCommand(args []string) {
+	if len(args) < 3 {
+		fmt.Println("Usage: auxbox album \"<album>\"")
+		os.Exit(1)
+	}
+
+	album := args[2]
+	if album == "" {
+		fmt.Println("Album cannot be empty")
+		os.Exit(1)
+	}
+
+	c.sendCommand(shared.NewAlbumCommand(album))
+}
+
+func (c *CLI) handleYearCommand(args []string) {
+	if len(args) < 3 {
+		fmt.Println("Usage: auxbox year \"<year>\"")
+		os.Exit(1)
+	}
+
+	year := args[2]
+	if year == "" {
+		fmt.Println("Year cannot be empty")
+		os.Exit(1)
+	}
+
+	c.sendCommand(shared.NewYearCommand(year))
 }
 
 // startDaemonAndPlay starts the daemon and immediately begins playback
