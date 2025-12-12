@@ -4,11 +4,12 @@ This document outlines the phased development plan for auxbox, tracking complete
 
 ## Current Status
 
-**✅ Phases 1-3 Complete** - Core playback, shuffle, and repeat modes are fully implemented and stable.
+**✅ Phase 4 Complete!** - All core features are now implemented and stable:
+- Playback, shuffle, and repeat modes (Phases 1-3)
+- Complete metadata editing with ID3v2 tags (Phase 4)
+- DJ workflow integration with Rekordbox and Mixxx
 
-**🚧 Phase 4 In Planning** - Star rating feature is being designed. Implementation has not started.
-
-**📋 Phases 5-6 Future Vision** - Genre tagging and label tracking are planned concepts. Design and implementation timeline TBD.
+**📋 Phase 5+ Future** - Advanced features under consideration.
 
 ## Completed Phases
 
@@ -38,42 +39,43 @@ This document outlines the phased development plan for auxbox, tracking complete
 - Auto-loop playlists and individual tracks
 - Seamless track transitions on repeat
 
-## In Progress
+### Phase 4: Metadata Editing ✅
+**Completed: 2024**
 
-### Phase 4: DJ Star Rating ⭐
-**Status: Planning**
+**Implemented Features:**
+- Complete ID3v2 metadata editing for MP3 files
+- 1-5 star rating system (`auxbox rate`)
+- Record label tagging (`auxbox label`)
+- Genre tagging (`auxbox genre`)
+- Track info editing (`auxbox title`, `auxbox artist`, `auxbox album`, `auxbox year`)
+- Atomic writes with backup/restore system
+- Rekordbox and Mixxx integration via ID3v2 tags
 
-**Goals:**
-- 1-5 star rating system while listening
-- Rekordbox-compatible metadata writing
-- Energy-level track organization
-- Real-time rating during playback sessions
+**Technical Implementation:**
+- ID3v2 tag writing with POPM (rating), TCON (genre), TPUB (label) frames
+- Backup system prevents file corruption
+- Format validation (MP3 only, AIFF planned)
+- Real-time metadata editing during playback
 
-**Technical Challenges:**
-- Rekordbox database integration (star ratings stored in DB)
-- ID3v2 POPM (Popularimeter) frame compatibility
-- Metadata synchronization strategy
-
-**Implementation Plan:**
-- TBD - requires research on Rekordbox DB format
+**DJ Workflow:**
+- Rate tracks 1-5 stars for energy-level organization
+- Tag genres and labels while listening
+- Complete track metadata editing
+- Sync with Rekordbox via re-import
+- Sync with Mixxx file tag system
 
 ## Future Phases
 
-### Phase 5: Genre Tagging 🎵
-**Status: Planned**
+### Phase 5: Advanced Features 📋
+**Status: Under Consideration**
 
-- Real-time genre classification during listening
-- Style-based track organization
-- DJ workflow integration for genre-based playlists
-- ID3v2 TCON (Content Type) field writing
-
-### Phase 6: Label Tracking 🏷️
-**Status: Planned**
-
-- Record label metadata tracking
-- Source discovery and organization
-- Complete DJ preparation workflow
-- ID3v2 TPUB (Publisher) field writing
+Potential features being evaluated:
+- AIFF file support for metadata (Phase 4.5)
+- Smart playlists based on metadata
+- BPM detection and tagging
+- Key detection for harmonic mixing
+- Waveform analysis
+- Cue point management
 
 ## Future Considerations
 

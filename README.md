@@ -74,15 +74,22 @@ auxbox exit
 auxbox is perfect for DJs who want to organize tracks without opening heavy DJ software:
 
 ```bash
-# Rate tracks while listening (Phase 4 - Coming Soon)
-auxbox stars 5
+# Rate tracks while listening
+auxbox rate 5                    # 1-5 star rating
 
-# Tag genres and labels (Phase 5 & 6 - Planned)
-auxbox genre "Deep House"
-auxbox label "Defected Records"
+# Tag complete metadata
+auxbox label "Drumcode"          # Record label
+auxbox genre "Techno"            # Genre
+auxbox title "Peak Hour Tool"    # Track title
+auxbox artist "DJ Name"          # Artist
+auxbox album "EP Title"          # Album
+auxbox year "2024"               # Release year
+
+# View all metadata
+auxbox status -d
 ```
 
-All metadata syncs with rekordbox using industry-standard ID3v2 tags. See [DJ_WORKFLOW.md](docs/DJ_WORKFLOW.md) for details.
+All metadata syncs with Rekordbox and Mixxx using industry-standard ID3v2 tags. Works on MP3 files. See [DJ_WORKFLOW.md](docs/DJ_WORKFLOW.md) for details.
 
 ## 🛠️ Development Status
 
@@ -91,9 +98,10 @@ All metadata syncs with rekordbox using industry-standard ID3v2 tags. See [DJ_WO
 | Phase 1 | Streamlined UX | ✅ Complete |
 | Phase 2 | Shuffle Mode | ✅ Complete |
 | Phase 3 | Repeat Modes | ✅ Complete |
-| Phase 4 | Star Rating | 🚧 In Progress |
-| Phase 5 | Genre Tagging | 📋 Planned |
-| Phase 6 | Label Tracking | 📋 Planned |
+| Phase 4 | Metadata Editing | ✅ Complete |
+| Phase 5 | Advanced Features | 📋 Planned |
+
+**Phase 4** includes complete ID3v2 metadata editing: rating, label, genre, title, artist, album, and year.
 
 See [ROADMAP.md](docs/ROADMAP.md) for the complete development plan.
 
